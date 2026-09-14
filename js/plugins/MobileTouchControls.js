@@ -167,6 +167,7 @@
         const stickKnob = document.createElement("div");
         let stickActive = false;
         let stickMoved = false;
+        const stickDirectionThreshold = 0.24;
         stick.className = "mtc-stick";
         stickKnob.className = "mtc-stick-knob";
         stickKnob.textContent = "OK";
@@ -180,16 +181,16 @@
             const distanceY = event.clientY - centerY;
             const limit = rect.width * 0.28;
             const distance = Math.hypot(distanceX, distanceY);
-            if (distance > rect.width * 0.16) {
+            if (distance > rect.width * stickDirectionThreshold) {
                 stickMoved = true;
             }
             const knobX = distance > limit ? (distanceX / distance) * limit : distanceX;
             const knobY = distance > limit ? (distanceY / distance) * limit : distanceY;
             stickKnob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
-            touchState.left = distanceX < -rect.width * 0.16;
-            touchState.right = distanceX > rect.width * 0.16;
-            touchState.up = distanceY < -rect.height * 0.16;
-            touchState.down = distanceY > rect.height * 0.16;
+            touchState.left = distanceX < -rect.width * stickDirectionThreshold;
+            touchState.right = distanceX > rect.width * stickDirectionThreshold;
+            touchState.up = distanceY < -rect.height * stickDirectionThreshold;
+            touchState.down = distanceY > rect.height * stickDirectionThreshold;
         };
         const releaseStick = event => {
             if (!stickActive) {
