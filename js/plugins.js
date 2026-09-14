@@ -7,5 +7,6 @@ var $plugins =
 {"name":"MobileTouchControls","status":true,"description":"Adds on-screen controls for touch devices.","parameters":{}},
 {"name":"PlayerMoveSpeedOptions","status":true,"description":"Adds walking and running speed settings to the options menu.","parameters":{"MinSpeed":"3","MaxSpeed":"6","DefaultWalkSpeed":"4","DefaultDashSpeed":"5"}},
 {"name":"LicenseNotice","status":true,"description":"Adds a credits and licenses item to the title menu.","parameters":{}},
-{"name":"DisableMouseMapClickMove","status":true,"description":"Prevents mouse-originated clicks from moving the player on the map.","parameters":{}}
+{"name":"DisableMouseMapClickMove","status":true,"description":"Prevents mouse-originated clicks from moving the player on the map.","parameters":{}},
+{"name":"MainFontLetterSpacing","status":true,"description":"Adjusts the letter spacing of the main game font.","parameters":{"HiraganaSpacing":"-9.00","KatakanaSpacing":"-10.00","KanjiSpacing":"-8.00","LatinNumberSpacing":"-2.00","LetterSpacing":"-2.00"}}
 ];

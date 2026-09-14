@@ -21,6 +21,7 @@ not grant rights to redistribute third-party game assets separately.
 - MobileTouchControls.js: Copyright (c) 2026 kaellkun.
 - Keke_SpeedStarBattle.js: Copyright (c) 2021 ケケー. Released under the MIT License. https://opensource.org/licenses/mit-license.php
 - LicenseNotice.js: Copyright (c) 2026 kaellkun.
+- MainFontLetterSpacing.js: Copyright (c) 2026 kaellkun.
 
 The project folder also includes the RPG Maker MZ default plugins
 `AltMenuScreen`, `AltSaveScreen`, `ButtonPicture`, and `TextPicture`, authored
@@ -40,3 +41,17 @@ by Yoji Ojima. They are not enabled in the current plugin configuration.
 Audio, images, fonts, movies, and other assets in this project may have
 separate copyright and license terms. Use, modification, and redistribution of
 those assets require confirmation of the applicable rights and licenses.
+
+### Senobi Gothic
+
+The Senobi Gothic font files in `fonts/` are distributed by MODI (MODI工房),
+version 1.00, dated 2017-07-02. Senobi Gothic is based on M+ FONTS and includes
+the M+ OUTLINE FONTS glyphs. The font is provided under the terms stated in the
+font's accompanying readme and the M+ OUTLINE FONTS terms:
+
+- MODI: http://modi.jpn.org/
+- M+ OUTLINE FONTS: http://mplus-fonts.sourceforge.jp/
+
+The Senobi Gothic author requests that the font be used at the user's own
+responsibility. The original font readme should be retained with any separate
+redistribution of the font files.
