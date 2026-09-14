@@ -23,6 +23,13 @@
  * @type boolean
  * @default true
  *
+ * @param MapScale
+ * @text Map Scale
+ * @type number
+ * @decimals 2
+ * @min 1.00
+ * @default 2.00
+ *
  * @help VerticalDisplayFullscreen.js
  *
  * On portrait screens, this plugin keeps Graphics.boxWidth/boxHeight at the
@@ -40,6 +47,7 @@
     const portraitOnly = parameters.PortraitOnly !== "false";
     const maxScreenHeight = Number(parameters.MaxScreenHeight || 1800);
     const desktopPortraitPreview = parameters.DesktopPortraitPreview !== "false";
+    const mapScale = Math.max(1, Number(parameters.MapScale || 2));
     const boxMargin = 4;
 
     const setupViewport = () => {
@@ -126,5 +134,30 @@
             this._tilemap.width = Graphics.width;
             this._tilemap.height = Graphics.height;
         }
+    };
+
+    const originalMapUpdate = Spriteset_Map.prototype.update;
+    Spriteset_Map.prototype.update = function() {
+        originalMapUpdate.call(this);
+        if (shouldExpand()) {
+            this._baseSprite.scale.x = mapScale;
+            this._baseSprite.scale.y = mapScale;
+        }
+    };
+
+    const originalScreenTileX = Game_Map.prototype.screenTileX;
+    Game_Map.prototype.screenTileX = function() {
+        if (shouldExpand()) {
+            return Math.round((Graphics.width / this.tileWidth() / mapScale) * 16) / 16;
+        }
+        return originalScreenTileX.call(this);
+    };
+
+    const originalScreenTileY = Game_Map.prototype.screenTileY;
+    Game_Map.prototype.screenTileY = function() {
+        if (shouldExpand()) {
+            return Math.round((Graphics.height / this.tileHeight() / mapScale) * 16) / 16;
+        }
+        return originalScreenTileY.call(this);
     };
 })();

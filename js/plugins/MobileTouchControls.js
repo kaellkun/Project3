@@ -57,6 +57,11 @@
         }
     };
 
+    const consumePointerEvent = event => {
+        event.preventDefault();
+        event.stopPropagation();
+    };
+
     const originalInputClear = Input.clear;
     Input.clear = function() {
         originalInputClear.call(this);
@@ -117,9 +122,10 @@
         style.textContent = `
             html, body { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: none; }
             #mobileTouchControls { --mtc-size: clamp(72px, 21vw, 104px); --mtc-gap: clamp(2px, 1vw, 6px); --mtc-edge: max(16px, env(safe-area-inset-right)); --mtc-bottom: max(54px, env(safe-area-inset-bottom)); position: fixed; inset: 0; z-index: 20; pointer-events: none; touch-action: none; }
-            #mobileTouchControls button { position: absolute; width: var(--mtc-size); height: var(--mtc-size); border: 3px solid rgba(255, 255, 255, 0.7); border-radius: 50%; background: rgba(17, 24, 39, 0.58); color: #ffffff; font: 700 clamp(22px, 6vw, 38px) sans-serif; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
+            #mobileTouchControls .mtc-touch-blocker { position: absolute; right: 0; bottom: 0; width: min(58vw, calc(var(--mtc-size) * 3.25)); height: calc(var(--mtc-bottom) + var(--mtc-size) * 2.12); background: transparent; pointer-events: auto; touch-action: none; }
+            #mobileTouchControls button { position: absolute; z-index: 1; width: var(--mtc-size); height: var(--mtc-size); border: 3px solid rgba(255, 255, 255, 0.7); border-radius: 50%; background: rgba(17, 24, 39, 0.58); color: #ffffff; font: 700 clamp(22px, 6vw, 38px) sans-serif; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
             #mobileTouchControls button:active { background: rgba(14, 116, 144, 0.9); transform: scale(0.94); }
-            #mobileTouchControls .mtc-stick { position: absolute; right: calc(var(--mtc-edge) + var(--mtc-size) * 0.84 + var(--mtc-gap)); bottom: var(--mtc-bottom); width: calc(var(--mtc-size) * 1.42); height: calc(var(--mtc-size) * 1.42); border: 3px solid rgba(255, 255, 255, 0.55); border-radius: 50%; background: rgba(17, 24, 39, 0.42); box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.08); pointer-events: auto; touch-action: none; }
+            #mobileTouchControls .mtc-stick { position: absolute; z-index: 1; right: calc(var(--mtc-edge) + var(--mtc-size) * 0.84 + var(--mtc-gap)); bottom: calc(var(--mtc-bottom) - 16px); width: calc(var(--mtc-size) * 1.42); height: calc(var(--mtc-size) * 1.42); border: 3px solid rgba(255, 255, 255, 0.55); border-radius: 50%; background: rgba(17, 24, 39, 0.42); box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.08); pointer-events: auto; touch-action: none; }
             #mobileTouchControls .mtc-stick::before, #mobileTouchControls .mtc-stick::after { content: ""; position: absolute; background: rgba(255, 255, 255, 0.22); }
             #mobileTouchControls .mtc-stick::before { top: 12%; bottom: 12%; left: 50%; width: 2px; }
             #mobileTouchControls .mtc-stick::after { right: 12%; left: 12%; top: 50%; height: 2px; }
@@ -131,6 +137,12 @@
 
         const container = document.createElement("div");
         container.id = "mobileTouchControls";
+        const blocker = document.createElement("div");
+        blocker.className = "mtc-touch-blocker";
+        for (const eventName of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) {
+            blocker.addEventListener(eventName, consumePointerEvent);
+        }
+        container.appendChild(blocker);
         const stick = document.createElement("div");
         const stickKnob = document.createElement("div");
         let stickActive = false;
@@ -138,7 +150,7 @@
         stickKnob.className = "mtc-stick-knob";
         stick.appendChild(stickKnob);
         const updateStick = event => {
-            event.preventDefault();
+            consumePointerEvent(event);
             const rect = stick.getBoundingClientRect();
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
@@ -155,7 +167,7 @@
             touchState.down = distanceY > rect.height * 0.16;
         };
         const releaseStick = event => {
-            event.preventDefault();
+            consumePointerEvent(event);
             stickActive = false;
             touchState.up = false;
             touchState.down = false;
@@ -164,7 +176,7 @@
             stickKnob.style.transform = "translate(-50%, -50%)";
         };
         stick.addEventListener("pointerdown", event => {
-            event.preventDefault();
+            consumePointerEvent(event);
             stickActive = true;
             try {
                 stick.setPointerCapture(event.pointerId);
@@ -180,7 +192,16 @@
         });
         stick.addEventListener("pointerup", releaseStick);
         stick.addEventListener("pointercancel", releaseStick);
-        stick.addEventListener("lostpointercapture", releaseStick);
+        document.addEventListener("pointerup", event => {
+            if (stickActive) {
+                releaseStick(event);
+            }
+        }, true);
+        document.addEventListener("pointercancel", event => {
+            if (stickActive) {
+                releaseStick(event);
+            }
+        }, true);
         container.appendChild(stick);
         const buttons = [
             ["ok", "mtc-ok", "OK"],
@@ -194,11 +215,11 @@
             button.textContent = label;
             button.setAttribute("aria-label", keyName);
             const press = event => {
-                event.preventDefault();
+                consumePointerEvent(event);
                 touchState[keyName] = true;
             };
             const release = event => {
-                event.preventDefault();
+                consumePointerEvent(event);
                 touchState[keyName] = false;
             };
             button.addEventListener("pointerdown", press);

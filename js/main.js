@@ -17,6 +17,11 @@ const scriptUrls = [
     "js/plugins.js"
 ];
 const effekseerWasmUrl = "js/libs/effekseer.wasm";
+const project3CacheBuster = window.__Project3CacheBuster || String(Date.now());
+const withProject3CacheBuster = url => {
+    const separator = url.includes("?") ? "&" : "?";
+    return `${url}${separator}v=${project3CacheBuster}`;
+};
 
 class Main {
     constructor() {
@@ -67,7 +72,7 @@ class Main {
         for (const url of scriptUrls) {
             const script = document.createElement("script");
             script.type = "text/javascript";
-            script.src = url;
+            script.src = withProject3CacheBuster(url);
             script.async = false;
             script.defer = true;
             script.onload = this.onScriptLoad.bind(this);
@@ -82,8 +87,16 @@ class Main {
 
     onScriptLoad() {
         if (++this.loadCount === this.numScripts) {
+            this.applyCacheBusterToPlugins();
             PluginManager.setup($plugins);
         }
+    }
+
+    applyCacheBusterToPlugins() {
+        const originalMakeUrl = PluginManager.makeUrl;
+        PluginManager.makeUrl = function(filename) {
+            return withProject3CacheBuster(originalMakeUrl.call(this, filename));
+        };
     }
 
     onScriptError(e) {

@@ -11,6 +11,19 @@
         <title>Project3</title>
     </head>
     <body style="background-color: black">
-        <script type="text/javascript" src="js/main.js"></script>
+        <script type="text/javascript">
+            (() => {
+                const cacheBuster = String(Date.now());
+                window.__Project3CacheBuster = cacheBuster;
+                const stylesheet = document.querySelector("link[href='css/game.css']");
+                if (stylesheet) {
+                    stylesheet.href = `css/game.css?v=${cacheBuster}`;
+                }
+                const script = document.createElement("script");
+                script.type = "text/javascript";
+                script.src = `js/main.js?v=${cacheBuster}`;
+                document.body.appendChild(script);
+            })();
+        </script>
     </body>
 </html>
