@@ -52,10 +52,19 @@
  * @default 1
  * @desc Fallback spacing after punctuation and other characters, in pixels.
  *
+ * @param MessageLineSpacing
+ * @text Message line spacing
+ * @type number
+ * @decimals 2
+ * @min -20
+ * @max 20
+ * @default 0
+ * @desc Additional spacing between lines in the message window, in pixels.
+ *
  * @param SpecialCharacterRules
  * @text Special character rules
  * @type string
- * @default [{"character":"【","leftTrim":1,"rightTrim":0,"noSpacingAfter":true},{"character":"】","leftTrim":0,"rightTrim":1},{"character":"「","leftTrim":1,"rightTrim":0,"noSpacingAfter":true},{"character":"」","leftTrim":0,"rightTrim":1},{"character":"『","leftTrim":1,"rightTrim":0},{"character":"』","leftTrim":0,"rightTrim":1},{"character":"（","leftTrim":1,"rightTrim":0},{"character":"）","leftTrim":0,"rightTrim":1},{"character":"［","leftTrim":1,"rightTrim":0},{"character":"］","leftTrim":0,"rightTrim":1},{"character":"｛","leftTrim":1,"rightTrim":0},{"character":"｝","leftTrim":0,"rightTrim":1}]
+ * @default [{"character":"【","leftTrim":1,"rightTrim":0,"noSpacingAfter":true},{"character":"】","leftTrim":0,"rightTrim":1},{"character":"「","leftTrim":1,"rightTrim":0,"noSpacingAfter":true},{"character":"」","leftTrim":0,"rightTrim":1},{"character":"、","leftTrim":0,"rightTrim":1},{"character":"。","leftTrim":0,"rightTrim":1},{"character":"『","leftTrim":1,"rightTrim":0},{"character":"』","leftTrim":0,"rightTrim":1},{"character":"（","leftTrim":1,"rightTrim":0},{"character":"）","leftTrim":0,"rightTrim":1},{"character":"［","leftTrim":1,"rightTrim":0},{"character":"］","leftTrim":0,"rightTrim":1},{"character":"｛","leftTrim":1,"rightTrim":0},{"character":"｝","leftTrim":0,"rightTrim":1}]
  * @desc JSON rules. leftTrim/rightTrim remove half-width units. leftPadding/rightPadding add font-size units.
  *
  * @help MainFontLetterSpacing.js
@@ -79,9 +88,15 @@
         latinNumber: Number(parameters.LatinNumberSpacing || 0),
         other: Number(parameters.LetterSpacing || 0)
     };
+    const messageLineSpacing = Number(parameters.MessageLineSpacing || 0);
+    const baseFontSize = () =>
+        typeof $gameSystem?.mainFontSize === "function"
+            ? $gameSystem.mainFontSize()
+            : 28;
 
     const defaultSpecialCharacterRules = [
         ["【", 1, 0, 0, true], ["】", 0, 1, 0.2, false], ["「", 1, 0, 0, true], ["」", 0, 1, 0, false],
+        ["、", 0, 1, 0, false], ["。", 0, 1, 0, false],
         ["『", 1, 0, 0, false], ["』", 0, 1, 0, false], ["（", 1, 0, 0, false], ["）", 0, 1, 0, false],
         ["［", 1, 0, 0, false], ["］", 0, 1, 0, false], ["｛", 1, 0, 0, false], ["｝", 0, 1, 0, false]
     ];
@@ -120,45 +135,57 @@
             };
         }
     }
+    for (const character of ["、", "。"] ) {
+        if (!specialCharacterRules[character]) {
+            specialCharacterRules[character] = {
+                leftTrim: 0,
+                rightTrim: 1,
+                leftPadding: 0,
+                rightPadding: 0,
+                noSpacingAfter: false
+            };
+        }
+    }
 
     const isMainFont = bitmap =>
         bitmap.fontFace && bitmap.fontFace.includes("rmmz-mainfont");
 
     const toCharacters = text => Array.from(String(text));
 
-    const characterSpacing = character => {
+    const characterSpacing = (bitmap, character) => {
+        const scale = bitmap.fontSize / baseFontSize();
         if (specialCharacterRules[character]?.noSpacingAfter) {
             return 0;
         }
         const codePoint = character.codePointAt(0);
         if (codePoint >= 0x3040 && codePoint <= 0x309f) {
-            return spacing.hiragana;
+            return spacing.hiragana * scale;
         }
         if (codePoint >= 0x30a0 && codePoint <= 0x30ff) {
-            return spacing.katakana;
+            return spacing.katakana * scale;
         }
         if (
             (codePoint >= 0x3400 && codePoint <= 0x4dbf) ||
             (codePoint >= 0x4e00 && codePoint <= 0x9fff) ||
             (codePoint >= 0xf900 && codePoint <= 0xfaff)
         ) {
-            return spacing.kanji;
+            return spacing.kanji * scale;
         }
         if (
             (codePoint >= 0x0030 && codePoint <= 0x0039) ||
             (codePoint >= 0x0041 && codePoint <= 0x005a) ||
             (codePoint >= 0x0061 && codePoint <= 0x007a)
         ) {
-            return spacing.latinNumber;
+            return spacing.latinNumber * scale;
         }
         if (
             (codePoint >= 0xff10 && codePoint <= 0xff19) ||
             (codePoint >= 0xff21 && codePoint <= 0xff3a) ||
             (codePoint >= 0xff41 && codePoint <= 0xff5a)
         ) {
-            return spacing.kanji;
+            return spacing.kanji * scale;
         }
-        return spacing.other;
+        return spacing.other * scale;
     };
 
     const characterTrim = (bitmap, character) => {
@@ -184,7 +211,7 @@
             width += trim.leftPadding + trim.rightPadding;
         }
         for (let index = 0; index < characters.length - 1; index++) {
-            width += characterSpacing(characters[index]);
+            width += characterSpacing(bitmap, characters[index]);
         }
         return width;
     };
@@ -209,9 +236,19 @@
             drawX += context.measureText(character).width - trim.left - trim.right;
             drawX += trim.rightPadding;
             if (index < characters.length - 1) {
-                drawX += characterSpacing(character);
+                drawX += characterSpacing(bitmap, character);
             }
         }
+    };
+
+    const lastTextCharacter = text => {
+        const characters = toCharacters(text);
+        return characters[characters.length - 1];
+    };
+
+    const hasNextTextCharacter = textState => {
+        const nextCharacter = textState.text[textState.index];
+        return nextCharacter && nextCharacter.charCodeAt(0) >= 0x20;
     };
 
     const originalMeasureTextWidth = Bitmap.prototype.measureTextWidth;
@@ -256,5 +293,34 @@
         drawSpacedText(this, text, tx, ty, align);
         context.restore();
         this._baseTexture.update();
+    };
+
+    const originalFlushTextState = Window_Base.prototype.flushTextState;
+    Window_Base.prototype.flushTextState = function(textState) {
+        const bitmap = this.contents;
+        const lastCharacter = lastTextCharacter(textState.buffer);
+        originalFlushTextState.call(this, textState);
+        if (
+            isMainFont(bitmap) &&
+            lastCharacter &&
+            hasNextTextCharacter(textState)
+        ) {
+            textState.x += characterSpacing(bitmap, lastCharacter);
+        }
+    };
+
+    const originalMessageCalcTextHeight = Window_Message.prototype.calcTextHeight;
+    Window_Message.prototype.calcTextHeight = function(textState) {
+        return originalMessageCalcTextHeight.call(this, textState) + messageLineSpacing;
+    };
+
+    const originalMessageWindowRect = Scene_Message.prototype.messageWindowRect;
+    Scene_Message.prototype.messageWindowRect = function() {
+        const rect = originalMessageWindowRect.call(this);
+        const defaultFourLineHeight = this.calcWindowHeight(4, false);
+        const threeLineHeight = this.calcWindowHeight(3, false);
+        rect.height -= defaultFourLineHeight - threeLineHeight;
+        rect.height += messageLineSpacing * 3;
+        return rect;
     };
 })();

@@ -1,0 +1,55 @@
+{
+  "$comment": "実績の編集用ファイルです。並び順が表示順になります。keyは重複不可・公開後は変更しないでください。サンプルは自動獲得しません。",
+  "achievements": [
+    {
+      "key": "story_first_step",
+      "title": "冒険の始まり",
+      "category": "物語",
+      "description": ["旅立ちの一歩を踏み出した。", "ここから、あなただけの冒険が始まる。"],
+      "hint": "旅立ちのイベントを進めよう。",
+      "icon": 82,
+      "$comment": "旅立ちイベントの最後で、本体の実績獲得コマンドに story_first_step を指定します。"
+    },
+    {
+      "key": "story_first_request",
+      "title": "はじめての依頼",
+      "category": "物語",
+      "description": "最初の依頼を達成した。",
+      "hint": "困っている人の話を聞いてみよう。",
+      "icon": 83,
+      "$comment": "依頼完了イベントで story_first_request を獲得させるサンプルです。"
+    },
+    {
+      "key": "battle_first_win",
+      "title": "初勝利",
+      "category": "戦闘",
+      "description": "初めての戦いに勝利した。",
+      "hint": "戦闘で勝利しよう。",
+      "icon": 76,
+      "$comment": "イベント戦闘の勝利分岐で battle_first_win を獲得させるサンプルです。自動判定はありません。"
+    },
+    {
+      "key": "explore_first_treasure",
+      "title": "小さな宝探し",
+      "category": "探索",
+      "description": "初めて宝箱を開けた。",
+      "hint": "マップに置かれた宝箱を探そう。",
+      "icon": 210,
+      "$comment": "宝箱イベントで explore_first_treasure を獲得させるサンプルです。"
+    },
+    {
+      "key": "explore_hidden_place",
+      "title": "隠された場所",
+      "category": "探索",
+      "description": "人知れず眠る秘密の場所を発見した。",
+      "hint": "いつもとは違う道を調べてみよう。",
+      "icon": 87,
+      "isSecret": true,
+      "revealSwitchId": 0,
+      "revealVariableId": 0,
+      "revealThreshold": 0,
+      "note": "秘密実績のサンプル。獲得前は一覧に表示されません。",
+      "$comment": "発見イベントで explore_hidden_place を獲得させます。既存イベントへ影響しないよう秘密解除スイッチ・変数は未指定です。"
+    }
+  ]
+}

@@ -10,6 +10,11 @@
 敵のシールドブレイクと弱点表示UIを導入しています。DBタグなしでも動作します。
 設定方法は [シールドブレイクの説明](docs/shield-break-system.md) を参照してください。
 
+## 実績の編集
+
+実績とカテゴリは [外部JSONデータ](data/Achievements.json)で編集できます。サンプル実績5件を登録済みです。
+項目の説明とイベントからの獲得方法は [実績データの編集手順](docs/achievement-external-data.md) を参照してください。
+
 ## Copyright and License Notice
 
 Copyright (c) 2026 kaellkun.

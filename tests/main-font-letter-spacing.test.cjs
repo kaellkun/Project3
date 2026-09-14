@@ -7,7 +7,8 @@ const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
-function setup() {
+function setup(parameterOverrides = {}) {
+    const testParameters = { KanjiSpacing: '-8', ...parameterOverrides };
     const context = vm.createContext({ assert });
     const run = code => vm.runInContext(code, context);
     const core = read('js/rmmz_core.js');
@@ -22,6 +23,10 @@ function setup() {
         function Scene_Skill() {}
         function Scene_Shop() {}
         function Scene_Battle() {}
+        function Scene_Message() {}
+        Scene_Message.prototype.messageWindowRect = function() {
+            return { height: this.calcWindowHeight(4, false) + 8 };
+        };
         const ColorManager = {
             normalColor: () => '#ffffff',
             outlineColor: () => 'rgba(0, 0, 0, 0.6)'
@@ -31,8 +36,12 @@ function setup() {
     run(read('js/plugins.js'));
     run(`
         const PluginManager = {
-            parameters: name => $plugins.find(plugin => plugin.name === name).parameters
+            parameters: name => ({
+                ...$plugins.find(plugin => plugin.name === name).parameters,
+                ...${JSON.stringify(testParameters)}
+            })
         };
+        const $gameSystem = { mainFontSize: () => 28 };
     `);
     run(read('js/plugins/MainFontLetterSpacing.js'));
     run(read('js/plugins/FlexibleTopDownUI.js'));
@@ -47,7 +56,10 @@ function setup() {
                     .filter(([, value]) => typeof value !== 'function')));
             },
             restore() { Object.assign(this, stack.pop()); },
-            measureText(text) { return { width: Array.from(text).length * 28 }; },
+            measureText(text) {
+                const fontSize = Number.parseFloat(this.font) || 28;
+                return { width: Array.from(text).length * fontSize };
+            },
             strokeText(text, x, y) { draws.push({ kind: 'outline', text, x, y, alpha: this.globalAlpha }); },
             fillText(text, x, y) { draws.push({ kind: 'body', text, x, y, alpha: this.globalAlpha }); }
         };
@@ -124,6 +136,72 @@ test('opacity does not change configured letter spacing or alignment', () => {
             bitmap.drawText('攻撃', 10, 0, 240, 36, align);
             assert.deepEqual(draws.map(({ text, x, y }) => ({ text, x, y })), positions);
         }
+    `);
+});
+
+test('message text keeps letter spacing between incremental flushes', () => {
+    setup()(`
+        const message = Object.create(Window_Message.prototype);
+        message.contents = bitmap;
+        const textState = {
+            text: '攻撃',
+            index: 0,
+            x: 0,
+            y: 0,
+            startX: 0,
+            startY: 0,
+            width: 240,
+            height: 36,
+            rtl: false,
+            buffer: '',
+            drawing: true,
+            outputWidth: 0,
+            outputHeight: 0
+        };
+
+        message.processCharacter(textState);
+        message.flushTextState(textState);
+        assert.equal(textState.x, 20); // 28px glyph width - 8px kanji spacing.
+
+        message.processCharacter(textState);
+        message.flushTextState(textState);
+        assert.equal(textState.x, 48);
+    `);
+});
+
+test('message line spacing is added to each message line height', () => {
+    setup({ MessageLineSpacing: '6' })(`
+        const message = Object.create(Window_Message.prototype);
+        message.contents = bitmap;
+        message.lineHeight = () => 36;
+        const textState = { text: '一行目\\n二行目', index: 0 };
+        assert.equal(message.calcTextHeight(textState), 42);
+    `);
+});
+
+test('message window defaults to three lines including configured spacing', () => {
+    setup({ MessageLineSpacing: '6' })(`
+        const scene = Object.create(Scene_Message.prototype);
+        scene.calcWindowHeight = lines => lines * 36 + 24;
+        const rect = scene.messageWindowRect();
+        assert.equal(rect.height, 158);
+    `);
+});
+
+test('punctuation uses the closing quote trim rule', () => {
+    setup()(`
+        assert.equal(bitmap.measureTextWidth('」'), bitmap.measureTextWidth('、'));
+        assert.equal(bitmap.measureTextWidth('」'), bitmap.measureTextWidth('。'));
+    `);
+});
+
+test('letter spacing scales with the active font size', () => {
+    setup()(`
+        const standardWidth = bitmap.measureTextWidth('攻撃');
+        bitmap.fontSize = 16;
+        const labelWidth = bitmap.measureTextWidth('攻撃');
+        assert.equal(standardWidth, 48);
+        assert.ok(Math.abs(labelWidth - 27.42857142857143) < 1e-10);
     `);
 });
 
