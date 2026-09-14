@@ -106,7 +106,7 @@ DataManager.loadDataFile = function(name, src) {
     const xhr = new XMLHttpRequest();
     const url = "data/" + src;
     window[name] = null;
-    xhr.open("GET", url);
+    xhr.open("GET", Utils.cacheBustedUrl(url));
     xhr.overrideMimeType("application/json");
     xhr.onload = () => this.onXhrLoad(xhr, name, src, url);
     xhr.onerror = () => this.onXhrError(name, src, url);
@@ -817,7 +817,7 @@ FontManager.isReady = function() {
 };
 
 FontManager.startLoading = function(family, url) {
-    const source = "url(" + url + ")";
+    const source = "url(" + Utils.cacheBustedUrl(url) + ")";
     const font = new FontFace(family, source);
     this._urls[family] = url;
     this._states[family] = "loading";
@@ -1046,8 +1046,12 @@ EffectManager.load = function(filename) {
 
 EffectManager.startLoading = function(url) {
     const onLoad = () => this.onLoad(url);
-    const onError = (message, url) => this.onError(url);
-    const effect = Graphics.effekseer.loadEffect(url, 1, onLoad, onError);
+    // Retry the parent effect under its logical key, including texture failures.
+    const onError = () => this.onError(url);
+    // The fifth argument also versions referenced textures and model files.
+    const effect = Graphics.effekseer.loadEffect(
+        Utils.cacheBustedUrl(url), 1, onLoad, onError, Utils.cacheBustedUrl
+    );
     this._cache[url] = effect;
     return effect;
 };

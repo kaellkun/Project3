@@ -130,22 +130,36 @@
         controlsEnabled = true;
         style.textContent = `
             html, body { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: none; }
-            #mobileTouchControls { --mtc-size: clamp(72px, 21vw, 104px); --mtc-gap: 4px; --mtc-stick-size: clamp(96px, 30vw, 128px); --mtc-direction-size: clamp(44px, 12vw, 48px); --mtc-pad-size: calc(var(--mtc-stick-size) + var(--mtc-direction-size) * 2 + var(--mtc-gap) * 2); --mtc-edge: max(10px, env(safe-area-inset-right)); --mtc-bottom: max(30px, env(safe-area-inset-bottom)); position: fixed; inset: 0; z-index: 20; pointer-events: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+            #mobileTouchControls {
+                --mtc-size: clamp(72px, 21vw, 104px);
+                --mtc-gap: 4px;
+                --mtc-stick-size: clamp(96px, 30vw, 128px);
+                --mtc-direction-size: clamp(44px, 12vw, 48px);
+                --mtc-direction-depth: clamp(32px, 9vw, 36px);
+                --mtc-overlap: 8px;
+                --mtc-pad-size: calc(var(--mtc-stick-size) + (var(--mtc-direction-depth) - var(--mtc-overlap)) * 2);
+                --mtc-edge: max(10px, env(safe-area-inset-right));
+                --mtc-bottom: max(10px, env(safe-area-inset-bottom));
+                position: fixed; inset: 0; z-index: 20; pointer-events: none; touch-action: none;
+                user-select: none; -webkit-user-select: none;
+            }
             #mobileTouchControls .mtc-touch-blocker { position: absolute; right: 0; bottom: 0; width: calc(var(--mtc-edge) + var(--mtc-pad-size)); height: calc(var(--mtc-bottom) + var(--mtc-pad-size)); background: transparent; pointer-events: auto; touch-action: none; }
-            #mobileTouchControls .mtc-movement-pad { position: absolute; z-index: 1; right: var(--mtc-edge); bottom: var(--mtc-bottom); display: grid; grid-template: var(--mtc-direction-size) var(--mtc-stick-size) var(--mtc-direction-size) / var(--mtc-direction-size) var(--mtc-stick-size) var(--mtc-direction-size); gap: var(--mtc-gap); pointer-events: none; }
+            #mobileTouchControls .mtc-movement-pad { position: absolute; z-index: 1; right: var(--mtc-edge); bottom: var(--mtc-bottom); width: var(--mtc-pad-size); height: var(--mtc-pad-size); pointer-events: none; }
             #mobileTouchControls button { position: absolute; z-index: 1; width: var(--mtc-size); height: var(--mtc-size); border: 3px solid rgba(255, 255, 255, 0.7); border-radius: 50%; background: rgba(17, 24, 39, 0.58); color: #ffffff; font: 700 clamp(22px, 6vw, 38px) sans-serif; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
             #mobileTouchControls button:active, #mobileTouchControls button.is-pressed { background: rgba(14, 116, 144, 0.9); transform: scale(0.94); }
-            #mobileTouchControls .mtc-direction { position: relative; box-sizing: border-box; align-self: center; justify-self: center; width: var(--mtc-direction-size); height: var(--mtc-direction-size); padding: 0; border-radius: 14px; font-size: 24px; }
-            #mobileTouchControls .mtc-up { grid-area: 1 / 2; }
-            #mobileTouchControls .mtc-down { grid-area: 3 / 2; }
-            #mobileTouchControls .mtc-left { grid-area: 2 / 1; }
-            #mobileTouchControls .mtc-right { grid-area: 2 / 3; }
-            #mobileTouchControls .mtc-stick { position: relative; grid-area: 2 / 2; box-sizing: border-box; width: var(--mtc-stick-size); height: var(--mtc-stick-size); border: 3px solid rgba(255, 255, 255, 0.55); border-radius: 50%; background: rgba(17, 24, 39, 0.42); box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.08); pointer-events: auto; touch-action: none; }
+            #mobileTouchControls .mtc-direction { box-sizing: border-box; z-index: 2; width: var(--mtc-direction-size); height: var(--mtc-direction-depth); padding: 0; border-radius: 8px; font-size: 24px; line-height: 1; }
+            #mobileTouchControls .mtc-up, #mobileTouchControls .mtc-down { left: calc((var(--mtc-pad-size) - var(--mtc-direction-size)) / 2); }
+            #mobileTouchControls .mtc-up { top: 0; }
+            #mobileTouchControls .mtc-down { bottom: 0; }
+            #mobileTouchControls .mtc-left, #mobileTouchControls .mtc-right { top: calc((var(--mtc-pad-size) - var(--mtc-direction-size)) / 2); width: var(--mtc-direction-depth); height: var(--mtc-direction-size); }
+            #mobileTouchControls .mtc-left { left: 0; }
+            #mobileTouchControls .mtc-right { right: 0; }
+            #mobileTouchControls .mtc-stick { position: absolute; left: calc(var(--mtc-direction-depth) - var(--mtc-overlap)); top: calc(var(--mtc-direction-depth) - var(--mtc-overlap)); box-sizing: border-box; width: var(--mtc-stick-size); height: var(--mtc-stick-size); border: 3px solid rgba(255, 255, 255, 0.55); border-radius: 50%; background: rgba(17, 24, 39, 0.42); box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.08); pointer-events: auto; touch-action: none; }
             #mobileTouchControls .mtc-stick::before, #mobileTouchControls .mtc-stick::after { content: ""; position: absolute; background: rgba(255, 255, 255, 0.22); }
             #mobileTouchControls .mtc-stick::before { top: 12%; bottom: 12%; left: 50%; width: 2px; }
             #mobileTouchControls .mtc-stick::after { right: 12%; left: 12%; top: 50%; height: 2px; }
             #mobileTouchControls .mtc-stick-knob { position: absolute; left: 50%; top: 50%; width: 52%; height: 52%; border: 3px solid rgba(255, 255, 255, 0.8); border-radius: 50%; background: rgba(5, 111, 146, 0.72); color: #ffffff; display: grid; place-items: center; font: 700 clamp(12px, 4vw, 22px) sans-serif; transform: translate(-50%, -50%); pointer-events: none; }
-            #mobileTouchControls .mtc-cancel { right: var(--mtc-edge); bottom: calc(var(--mtc-bottom) + var(--mtc-pad-size) - var(--mtc-direction-size)); width: var(--mtc-direction-size); height: var(--mtc-direction-size); padding: 0; font-size: 24px; }
+            #mobileTouchControls .mtc-cancel { box-sizing: border-box; right: var(--mtc-edge); bottom: calc(var(--mtc-bottom) + var(--mtc-pad-size) - var(--mtc-direction-size)); width: var(--mtc-direction-size); height: var(--mtc-direction-size); padding: 0; font-size: 24px; }
             #mobileTouchControls .mtc-page { display: none; left: max(10px, env(safe-area-inset-left)); bottom: var(--mtc-bottom); width: calc(var(--mtc-size) * 0.84); height: calc(var(--mtc-size) * 0.84); }
             #mobileTouchControls .mtc-pageup { bottom: calc(var(--mtc-bottom) + var(--mtc-size) * 0.84 + var(--mtc-gap)); }
             #mobileTouchControls .mtc-page.is-visible { display: block; }

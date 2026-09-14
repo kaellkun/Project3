@@ -63,6 +63,7 @@
  * Applies the configured spacing to text rendered with rmmz-mainfont.
  * Spacing is selected by the character being drawn and is not added after
  * the final character in a string.
+ * Disabled entries retain the window's paint opacity for both text and outline.
  * Number font text and other custom fonts are left unchanged.
  */
 
@@ -234,7 +235,6 @@
         }
 
         const context = this.context;
-        const alpha = context.globalAlpha;
         maxWidth = maxWidth || 0xffffffff;
         let tx = x;
         const ty = Math.round(y + lineHeight / 2 + this.fontSize * 0.35);
@@ -247,13 +247,13 @@
         context.font = this._makeFontNameText();
         context.textAlign = "left";
         context.textBaseline = "alphabetic";
-        context.globalAlpha = 1;
+        // Keep the alpha set by Bitmap.paintOpacity (e.g. disabled commands).
+        // Both glyph fill and outline must dim; save/restore preserves the state.
         context.strokeStyle = this.outlineColor;
         context.lineWidth = this.outlineWidth;
         context.lineJoin = "round";
         context.fillStyle = this.textColor;
         drawSpacedText(this, text, tx, ty, align);
-        context.globalAlpha = alpha;
         context.restore();
         this._baseTexture.update();
     };

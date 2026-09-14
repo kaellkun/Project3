@@ -19,8 +19,19 @@ const scriptUrls = [
 const effekseerWasmUrl = "js/libs/effekseer.wasm";
 const project3CacheBuster = window.__Project3CacheBuster || String(Date.now());
 const withProject3CacheBuster = url => {
-    const separator = url.includes("?") ? "&" : "?";
-    return `${url}${separator}v=${project3CacheBuster}`;
+    // Only version this game's resources, not blob/data URLs or other sites.
+    const base = new URL(".", document.baseURI);
+    const target = new URL(url, base);
+    if (!["http:", "https:", "file:"].includes(target.protocol) ||
+        target.origin !== base.origin || !target.pathname.startsWith(base.pathname)) {
+        return url;
+    }
+    const [pathAndQuery, ...fragment] = String(url).split("#");
+    const queryIndex = pathAndQuery.indexOf("?");
+    const path = queryIndex < 0 ? pathAndQuery : pathAndQuery.slice(0, queryIndex);
+    const query = new URLSearchParams(queryIndex < 0 ? "" : pathAndQuery.slice(queryIndex + 1));
+    query.set("v", project3CacheBuster);
+    return `${path}?${query}${fragment.length ? "#" + fragment.join("#") : ""}`;
 };
 
 class Main {
@@ -87,6 +98,8 @@ class Main {
 
     onScriptLoad() {
         if (++this.loadCount === this.numScripts) {
+            // Install before plugin setup and database/asset loading.
+            Utils.cacheBustedUrl = withProject3CacheBuster;
             this.applyCacheBusterToPlugins();
             PluginManager.setup($plugins);
         }
@@ -155,7 +168,7 @@ class Main {
     initEffekseerRuntime() {
         const onLoad = this.onEffekseerLoad.bind(this);
         const onError = this.onEffekseerError.bind(this);
-        effekseer.initRuntime(effekseerWasmUrl, onLoad, onError);
+        effekseer.initRuntime(withProject3CacheBuster(effekseerWasmUrl), onLoad, onError);
     }
 
     onEffekseerLoad() {

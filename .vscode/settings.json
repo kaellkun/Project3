@@ -3,6 +3,10 @@
         "/^git diff --check && node -e 'const fs=require\\(\"fs\"\\),vm=require\\(\"vm\"\\); const html=fs\\.readFileSync\\(\"docs/ui/ui-preview\\.html\",\"utf8\"\\); for\\(const \\[,source\\] of html\\.matchAll\\(/<script>\\(\\[\\\\s\\\\S\\]\\*\\?\\)<\\\\/script>/g\\)\\) new vm\\.Script\\(source\\); console\\.log\\(\"Preview JavaScript syntax: OK\"\\);' && git status --short$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^node --test tests/main-font-letter-spacing\\.test\\.cjs && node --check js/plugins/MainFontLetterSpacing\\.js && git diff --check$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }

@@ -7,24 +7,71 @@
         <title>Project3 - Clear Cache</title>
     </head>
     <body>
+        <h1>ゲームの再読み込み</h1>
+        <p id="status" role="status">キャッシュを確認しています。セーブデータは削除しません。</p>
+        <button id="start-game" type="button" hidden>ゲームを再読み込み</button>
         <script type="text/javascript">
             (() => {
-                const startGame = () => {
-                    window.location.replace(`index.html?cache-cleared=${Date.now()}`);
+                const base = new URL(".", window.location.href);
+                const status = document.getElementById("status");
+                const button = document.getElementById("start-game");
+                const belongsToGame = url => {
+                    const target = new URL(url, base);
+                    return target.origin === base.origin && target.pathname.startsWith(base.pathname);
                 };
+                const startGame = () => {
+                    const target = new URL("index.html", base);
+                    target.search = window.location.search;
+                    target.searchParams.set("cache-cleared", String(Date.now()));
+                    window.location.replace(target.href);
+                };
+                button.addEventListener("click", startGame);
 
                 const clearCache = async () => {
-                    if ("caches" in window) {
-                        const cacheNames = await caches.keys();
-                        await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
-                    }
-                    if ("serviceWorker" in navigator) {
-                        const registrations = await navigator.serviceWorker.getRegistrations();
-                        await Promise.all(registrations.map(registration => registration.unregister()));
+                    const failures = [];
+                    // Run independently: Safari/private mode can reject either API.
+                    const attempt = async operation => {
+                        try {
+                            await operation();
+                        } catch (error) {
+                            failures.push(error);
+                            console.warn("Project3 cache reset:", error);
+                        }
+                    };
+                    await Promise.all([
+                        attempt(async () => {
+                            if (!("caches" in window)) return;
+                            const names = await window.caches.keys();
+                            await Promise.all(names.map(async name => {
+                                const cache = await window.caches.open(name);
+                                const requests = await cache.keys();
+                                // Do not delete another game's caches on the same origin.
+                                await Promise.all(requests.filter(request => belongsToGame(request.url))
+                                    .map(request => cache.delete(request)));
+                            }));
+                        }),
+                        attempt(async () => {
+                            if (!("serviceWorker" in navigator)) return;
+                            const registrations = await navigator.serviceWorker.getRegistrations();
+                            await Promise.all(registrations.filter(registration => belongsToGame(registration.scope))
+                                .map(registration => registration.unregister()));
+                            const controller = navigator.serviceWorker.controller;
+                            if (controller && !belongsToGame(controller.scriptURL)) {
+                                throw new Error("親サイトのService Workerが制御しています。配信側での確認が必要です。");
+                            }
+                        })
+                    ]);
+                    if (failures.length) {
+                        status.textContent = "一部のキャッシュ処理に失敗しました。再読み込みは可能です。更新されない場合は配信設定も確認してください。セーブデータは削除していません。";
+                        button.hidden = false;
+                    } else {
+                        startGame();
                     }
                 };
 
-                clearCache().catch(() => {}).finally(startGame);
+                // Cache Storage is not the HTTP cache. The new navigation URL,
+                // plus per-boot asset URLs in main.js, bypass the latter.
+                clearCache();
             })();
         </script>
     </body>

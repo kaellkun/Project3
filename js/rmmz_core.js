@@ -372,6 +372,15 @@ Utils.encodeURI = function(str) {
 };
 
 /**
+ * Versions a final resource URL. Project3's main installs the per-boot policy
+ * before plugins load. Keep standalone engine consumers backward compatible.
+ * Apply after adding encrypted extensions, without changing logical cache keys.
+ */
+Utils.cacheBustedUrl = function(url) {
+    return url;
+};
+
+/**
  * Gets the filename that does not include subfolders.
  *
  * @param {string} filename - The filename with subfolders.
@@ -1793,7 +1802,7 @@ Bitmap.prototype._startLoading = function() {
     if (Utils.hasEncryptedImages()) {
         this._startDecrypting();
     } else {
-        this._image.src = this._url;
+        this._image.src = Utils.cacheBustedUrl(this._url);
         if (this._image.width > 0) {
             this._image.onload = null;
             this._onLoad();
@@ -1803,7 +1812,7 @@ Bitmap.prototype._startLoading = function() {
 
 Bitmap.prototype._startDecrypting = function() {
     const xhr = new XMLHttpRequest();
-    xhr.open("GET", this._url + "_");
+    xhr.open("GET", Utils.cacheBustedUrl(this._url + "_"));
     xhr.responseType = "arraybuffer";
     xhr.onload = () => this._onXhrLoad(xhr);
     xhr.onerror = this._onError.bind(this);
@@ -5100,7 +5109,7 @@ WebAudio.prototype._destroyDecoder = function() {
 };
 
 WebAudio.prototype._realUrl = function() {
-    return this._url + (Utils.hasEncryptedAudio() ? "_" : "");
+    return Utils.cacheBustedUrl(this._url + (Utils.hasEncryptedAudio() ? "_" : ""));
 };
 
 WebAudio.prototype._startXhrLoading = function(url) {
@@ -5553,7 +5562,7 @@ Video.resize = function(width, height) {
  * @param {string} src - The url of the video.
  */
 Video.play = function(src) {
-    this._element.src = src;
+    this._element.src = Utils.cacheBustedUrl(src);
     this._element.onloadeddata = this._onLoad.bind(this);
     this._element.onerror = this._onError.bind(this);
     this._element.onended = this._onEnd.bind(this);
