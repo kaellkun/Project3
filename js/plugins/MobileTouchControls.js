@@ -64,10 +64,9 @@
             #mobileTouchControls .mtc-stick::before { top: 12%; bottom: 12%; left: 50%; width: 2px; }
             #mobileTouchControls .mtc-stick::after { right: 12%; left: 12%; top: 50%; height: 2px; }
             #mobileTouchControls .mtc-stick-knob { position: absolute; left: 50%; top: 50%; width: 43%; height: 43%; border: 4px solid rgba(255, 255, 255, 0.8); border-radius: 50%; background: rgba(5, 111, 146, 0.72); transform: translate(-50%, -50%); pointer-events: none; }
-            #mobileTouchControls .mtc-menu { right: 28px; bottom: calc(var(--mtc-size) * 1.65); width: 180px; height: 90px; border-radius: 12px; font-size: 28px; }
-            #mobileTouchControls .mtc-ok { right: 28px; bottom: 42px; width: calc(var(--mtc-size) * 1.2); height: calc(var(--mtc-size) * 1.2); background: rgba(5, 111, 146, 0.7); }
-            #mobileTouchControls .mtc-cancel { right: calc(var(--mtc-size) * 1.18); bottom: 26px; width: calc(var(--mtc-size) * 0.72); height: calc(var(--mtc-size) * 0.72); font-size: 36px; }
-            @media (orientation: portrait) { #mobileTouchControls { --mtc-size: clamp(100px, 31vw, 140px); } #mobileTouchControls .mtc-menu { right: 20px; bottom: calc(var(--mtc-size) * 1.55); width: 120px; height: 66px; font-size: 20px; } #mobileTouchControls .mtc-ok { right: 20px; bottom: 26px; } #mobileTouchControls .mtc-cancel { right: calc(var(--mtc-size) * 1.12); bottom: 18px; } #mobileTouchControls .mtc-stick { right: calc(var(--mtc-size) * 1.55); bottom: 18px; } }
+            #mobileTouchControls .mtc-ok { right: 28px; bottom: 28px; width: calc(var(--mtc-size) * 1.2); height: calc(var(--mtc-size) * 1.2); background: rgba(5, 111, 146, 0.7); }
+            #mobileTouchControls .mtc-cancel { right: calc(var(--mtc-size) * 0.62); bottom: calc(var(--mtc-size) * 1.35); width: calc(var(--mtc-size) * 0.72); height: calc(var(--mtc-size) * 0.72); font-size: 36px; }
+            @media (orientation: portrait) { #mobileTouchControls { --mtc-size: clamp(100px, 31vw, 140px); } #mobileTouchControls .mtc-ok { right: 20px; bottom: 20px; } #mobileTouchControls .mtc-cancel { right: calc(var(--mtc-size) * 0.62); bottom: calc(var(--mtc-size) * 1.35); } #mobileTouchControls .mtc-stick { right: calc(var(--mtc-size) * 1.55); bottom: 18px; } }
         `;
         document.head.appendChild(style);
 
@@ -112,7 +111,6 @@
         stick.addEventListener("pointercancel", releaseStick);
         container.appendChild(stick);
         const buttons = [
-            ["menu", "mtc-menu", "MENU"],
             ["ok", "mtc-ok", "OK"],
             ["escape", "mtc-cancel", "X"]
         ];
