@@ -117,16 +117,6 @@
         applyVisualScreenSize();
     };
 
-    const originalCreateBattleField = Spriteset_Battle.prototype.createBattleField;
-    Spriteset_Battle.prototype.createBattleField = function() {
-        originalCreateBattleField.call(this);
-        if (shouldExpand()) {
-            this._battleField.setFrame(0, 0, Graphics.width, Graphics.height);
-            this._battleField.x = 0;
-            this._battleField.y = -this.battleFieldOffsetY();
-        }
-    };
-
     const originalCreateTilemap = Spriteset_Map.prototype.createTilemap;
     Spriteset_Map.prototype.createTilemap = function() {
         originalCreateTilemap.call(this);

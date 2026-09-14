@@ -23,10 +23,19 @@
         right: false,
         ok: false,
         escape: false,
-        menu: false
+        menu: false,
+        pageup: false,
+        pagedown: false
     };
     const keyboardState = {};
     let controlsEnabled = false;
+
+    Input.keyMapper[33] = null;
+    Input.keyMapper[34] = null;
+    Input.keyMapper[81] = "pageup";
+    Input.keyMapper[87] = "pagedown";
+    Input.keyMapper[76] = "pageup";
+    Input.keyMapper[82] = "pagedown";
 
     const buttonNameFromKeyboardEvent = event => {
         if (Input.keyMapper[event.keyCode]) {
@@ -52,6 +61,14 @@
             case "X":
             case "KeyX":
                 return "escape";
+            case "l":
+            case "L":
+            case "KeyL":
+                return "pageup";
+            case "r":
+            case "R":
+            case "KeyR":
+                return "pagedown";
             default:
                 return null;
         }
@@ -132,6 +149,10 @@
             #mobileTouchControls .mtc-stick-knob { position: absolute; left: 50%; top: 50%; width: 43%; height: 43%; border: 3px solid rgba(255, 255, 255, 0.8); border-radius: 50%; background: rgba(5, 111, 146, 0.72); transform: translate(-50%, -50%); pointer-events: none; }
             #mobileTouchControls .mtc-ok { right: var(--mtc-edge); bottom: var(--mtc-bottom); width: calc(var(--mtc-size) * 0.84); height: calc(var(--mtc-size) * 0.84); background: rgba(5, 111, 146, 0.7); }
             #mobileTouchControls .mtc-cancel { right: var(--mtc-edge); bottom: calc(var(--mtc-bottom) + var(--mtc-size) * 0.84 + var(--mtc-gap)); width: calc(var(--mtc-size) * 0.72); height: calc(var(--mtc-size) * 0.72); font-size: clamp(20px, 5vw, 30px); }
+            #mobileTouchControls .mtc-page { display: none; left: var(--mtc-edge); bottom: var(--mtc-bottom); width: calc(var(--mtc-size) * 0.84); height: calc(var(--mtc-size) * 0.84); }
+            #mobileTouchControls .mtc-pageup { left: var(--mtc-edge); }
+            #mobileTouchControls .mtc-pagedown { left: calc(var(--mtc-edge) + var(--mtc-size) + var(--mtc-gap)); }
+            #mobileTouchControls .mtc-page.is-visible { display: block; }
         `;
         document.head.appendChild(style);
 
@@ -205,7 +226,9 @@
         container.appendChild(stick);
         const buttons = [
             ["ok", "mtc-ok", "OK"],
-            ["escape", "mtc-cancel", "X"]
+            ["escape", "mtc-cancel", "X"],
+            ["pageup", "mtc-page mtc-pageup", "L"],
+            ["pagedown", "mtc-page mtc-pagedown", "R"]
         ];
 
         for (const [keyName, className, label] of buttons) {
@@ -228,6 +251,27 @@
             button.addEventListener("pointerleave", release);
             container.appendChild(button);
         }
+        const pageButtons = [
+            container.querySelector(".mtc-pageup"),
+            container.querySelector(".mtc-pagedown")
+        ];
+        const updatePageButtons = () => {
+            const scene = SceneManager._scene;
+            const visible = !!(
+                scene &&
+                scene.needsPageButtons &&
+                scene.needsPageButtons() &&
+                (!scene.arePageButtonsEnabled || scene.arePageButtonsEnabled())
+            );
+            for (const button of pageButtons) {
+                button.classList.toggle("is-visible", visible);
+            }
+        };
+        const originalSceneBaseUpdate = Scene_Base.prototype.update;
+        Scene_Base.prototype.update = function() {
+            originalSceneBaseUpdate.call(this);
+            updatePageButtons();
+        };
         document.body.appendChild(container);
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {

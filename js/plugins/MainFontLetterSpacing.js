@@ -52,6 +52,12 @@
  * @default 1
  * @desc Fallback spacing after punctuation and other characters, in pixels.
  *
+ * @param SpecialCharacterRules
+ * @text Special character rules
+ * @type string
+ * @default [{"character":"【","leftTrim":1,"rightTrim":0,"noSpacingAfter":true},{"character":"】","leftTrim":0,"rightTrim":1},{"character":"「","leftTrim":1,"rightTrim":0,"noSpacingAfter":true},{"character":"」","leftTrim":0,"rightTrim":1},{"character":"『","leftTrim":1,"rightTrim":0},{"character":"』","leftTrim":0,"rightTrim":1},{"character":"（","leftTrim":1,"rightTrim":0},{"character":"）","leftTrim":0,"rightTrim":1},{"character":"［","leftTrim":1,"rightTrim":0},{"character":"］","leftTrim":0,"rightTrim":1},{"character":"｛","leftTrim":1,"rightTrim":0},{"character":"｝","leftTrim":0,"rightTrim":1}]
+ * @desc JSON rules. leftTrim/rightTrim remove half-width units. leftPadding/rightPadding add font-size units.
+ *
  * @help MainFontLetterSpacing.js
  *
  * Applies the configured spacing to text rendered with rmmz-mainfont.
@@ -73,12 +79,56 @@
         other: Number(parameters.LetterSpacing || 0)
     };
 
+    const defaultSpecialCharacterRules = [
+        ["【", 1, 0, 0, true], ["】", 0, 1, 0.2, false], ["「", 1, 0, 0, true], ["」", 0, 1, 0, false],
+        ["『", 1, 0, 0, false], ["』", 0, 1, 0, false], ["（", 1, 0, 0, false], ["）", 0, 1, 0, false],
+        ["［", 1, 0, 0, false], ["］", 0, 1, 0, false], ["｛", 1, 0, 0, false], ["｝", 0, 1, 0, false]
+    ];
+
+    const parseSpecialCharacterRules = value => {
+        try {
+            const rules = JSON.parse(value || "[]");
+            return rules.reduce((result, rule) => {
+                if (rule.character) {
+                    result[rule.character] = {
+                        leftTrim: Number(rule.leftTrim || 0),
+                        rightTrim: Number(rule.rightTrim || 0),
+                        leftPadding: Number(rule.leftPadding || 0),
+                        rightPadding: Number(rule.rightPadding || 0),
+                        noSpacingAfter: rule.noSpacingAfter === true
+                    };
+                }
+                return result;
+            }, {});
+        } catch (error) {
+            return {};
+        }
+    };
+
+    const specialCharacterRules = parseSpecialCharacterRules(
+        parameters.SpecialCharacterRules
+    );
+    if (Object.keys(specialCharacterRules).length === 0) {
+        for (const [character, leftTrim, rightTrim, leftPadding, noSpacingAfter] of defaultSpecialCharacterRules) {
+            specialCharacterRules[character] = {
+                leftTrim,
+                rightTrim,
+                leftPadding,
+                rightPadding: 0,
+                noSpacingAfter
+            };
+        }
+    }
+
     const isMainFont = bitmap =>
         bitmap.fontFace && bitmap.fontFace.includes("rmmz-mainfont");
 
     const toCharacters = text => Array.from(String(text));
 
     const characterSpacing = character => {
+        if (specialCharacterRules[character]?.noSpacingAfter) {
+            return 0;
+        }
         const codePoint = character.codePointAt(0);
         if (codePoint >= 0x3040 && codePoint <= 0x309f) {
             return spacing.hiragana;
@@ -100,7 +150,27 @@
         ) {
             return spacing.latinNumber;
         }
+        if (
+            (codePoint >= 0xff10 && codePoint <= 0xff19) ||
+            (codePoint >= 0xff21 && codePoint <= 0xff3a) ||
+            (codePoint >= 0xff41 && codePoint <= 0xff5a)
+        ) {
+            return spacing.kanji;
+        }
         return spacing.other;
+    };
+
+    const characterTrim = (bitmap, character) => {
+        const rule = specialCharacterRules[character];
+        const halfWidth = bitmap.fontSize / 2;
+        return rule
+            ? {
+                left: rule.leftTrim * halfWidth,
+                right: rule.rightTrim * halfWidth,
+                leftPadding: rule.leftPadding * bitmap.fontSize,
+                rightPadding: rule.rightPadding * bitmap.fontSize
+            }
+            : { left: 0, right: 0, leftPadding: 0, rightPadding: 0 };
     };
 
     const measureSpacedText = (bitmap, text) => {
@@ -108,7 +178,9 @@
         const context = bitmap.context;
         let width = 0;
         for (const character of characters) {
-            width += context.measureText(character).width;
+            const trim = characterTrim(bitmap, character);
+            width += context.measureText(character).width - trim.left - trim.right;
+            width += trim.leftPadding + trim.rightPadding;
         }
         for (let index = 0; index < characters.length - 1; index++) {
             width += characterSpacing(characters[index]);
@@ -128,9 +200,13 @@
         }
         for (let index = 0; index < characters.length; index++) {
             const character = characters[index];
-            context.strokeText(character, drawX, y);
-            context.fillText(character, drawX, y);
-            drawX += context.measureText(character).width;
+            const trim = characterTrim(bitmap, character);
+            drawX += trim.leftPadding;
+            const glyphX = drawX - trim.left;
+            context.strokeText(character, glyphX, y);
+            context.fillText(character, glyphX, y);
+            drawX += context.measureText(character).width - trim.left - trim.right;
+            drawX += trim.rightPadding;
             if (index < characters.length - 1) {
                 drawX += characterSpacing(character);
             }
