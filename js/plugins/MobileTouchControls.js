@@ -29,6 +29,7 @@
     };
     const appliedTouchState = {};
     let controlsEnabled = false;
+    let resetControls = () => {};
 
     Input.keyMapper[33] = null;
     Input.keyMapper[34] = null;
@@ -45,8 +46,8 @@
     const originalInputClear = Input.clear;
     Input.clear = function() {
         originalInputClear.call(this);
+        clearTouchState();
         for (const keyName in touchState) {
-            touchState[keyName] = false;
             appliedTouchState[keyName] = false;
         }
     };
@@ -68,6 +69,7 @@
     };
 
     const clearTouchState = () => {
+        resetControls();
         for (const keyName in touchState) {
             touchState[keyName] = false;
         }
@@ -107,6 +109,15 @@
 
         const container = document.createElement("div");
         container.id = "mobileTouchControls";
+        // MZ listens to Touch/Mouse Events on document, not Pointer Events.
+        // Cancelling pointerdown alone does not stop the separate touch stream
+        // from turning a stick/button press into a map destination underneath.
+        for (const eventName of [
+            "touchstart", "touchmove", "touchend", "touchcancel",
+            "mousedown", "mousemove", "mouseup", "click", "contextmenu"
+        ]) {
+            container.addEventListener(eventName, consumePointerEvent, { passive: false });
+        }
         const blocker = document.createElement("div");
         blocker.className = "mtc-touch-blocker";
         for (const eventName of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) {
@@ -115,7 +126,7 @@
         container.appendChild(blocker);
         const stick = document.createElement("div");
         const stickKnob = document.createElement("div");
-        let stickActive = false;
+        let stickPointerId = null;
         let stickMoved = false;
         const stickDirectionThreshold = 0.24;
         stick.className = "mtc-stick";
@@ -142,25 +153,37 @@
             touchState.up = distanceY < -rect.height * stickDirectionThreshold;
             touchState.down = distanceY > rect.height * stickDirectionThreshold;
         };
-        const releaseStick = event => {
-            if (!stickActive) {
-                return;
-            }
-            consumePointerEvent(event);
-            if (event.type === "pointerup" && !stickMoved) {
-                Input.virtualClick("ok");
-            }
-            stickActive = false;
+        const resetStick = () => {
+            const pointerId = stickPointerId;
+            stickPointerId = null;
             stickMoved = false;
             touchState.up = false;
             touchState.down = false;
             touchState.left = false;
             touchState.right = false;
             stickKnob.style.transform = "translate(-50%, -50%)";
+            if (pointerId !== null && stick.hasPointerCapture(pointerId)) {
+                stick.releasePointerCapture(pointerId);
+            }
+        };
+        resetControls = resetStick;
+        const releaseStick = event => {
+            if (stickPointerId === null || event.pointerId !== stickPointerId) {
+                return;
+            }
+            consumePointerEvent(event);
+            const clicked = event.type === "pointerup" && !stickMoved;
+            resetStick();
+            if (clicked) {
+                Input.virtualClick("ok");
+            }
         };
         stick.addEventListener("pointerdown", event => {
             consumePointerEvent(event);
-            stickActive = true;
+            if (stickPointerId !== null || event.button !== 0) {
+                return;
+            }
+            stickPointerId = event.pointerId;
             stickMoved = false;
             try {
                 stick.setPointerCapture(event.pointerId);
@@ -170,22 +193,15 @@
             updateStick(event);
         });
         stick.addEventListener("pointermove", event => {
-            if (stickActive) {
+            if (stickPointerId !== null && event.pointerId === stickPointerId) {
                 updateStick(event);
             }
         });
         stick.addEventListener("pointerup", releaseStick);
         stick.addEventListener("pointercancel", releaseStick);
-        document.addEventListener("pointerup", event => {
-            if (stickActive) {
-                releaseStick(event);
-            }
-        }, true);
-        document.addEventListener("pointercancel", event => {
-            if (stickActive) {
-                releaseStick(event);
-            }
-        }, true);
+        stick.addEventListener("lostpointercapture", releaseStick);
+        document.addEventListener("pointerup", releaseStick, true);
+        document.addEventListener("pointercancel", releaseStick, true);
         container.appendChild(stick);
         const buttons = [
             ["escape", "mtc-cancel", "X"],
@@ -235,6 +251,8 @@
             updatePageButtons();
         };
         document.body.appendChild(container);
+        window.addEventListener("blur", clearTouchState);
+        window.addEventListener("pagehide", clearTouchState);
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {
                 clearTouchState();

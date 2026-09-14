@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>JRPG Adaptive UI — 道具画面の設計見本</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", sans-serif; color: #f1f4f8; background: #090e18; font-size: 18px; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 20px max(12px, env(safe-area-inset-right)) 24px max(12px, env(safe-area-inset-left)); }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    button { font: inherit; color: inherit; cursor: pointer; border: 1px solid #536079; border-radius: 8px; background: #182438; min-height: 48px; padding: 10px 14px; touch-action: manipulation; }
+    button:hover:not(:disabled) { background: #253750; }
+    button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3px solid #f3d493; outline-offset: 3px; }
+    button:disabled { cursor: not-allowed; color: #b2bbc8; background: #202837; }
+    a { color: #eed397; }
+    h1, h2, h3, p { margin: 0; }
+    .intro { max-width: 1080px; margin: 0 auto 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .eyebrow { color: #d8ba80; font-size: 12px; letter-spacing: .15em; font-weight: 700; }
+    h1 { font-size: 22px; margin: 4px 0; }
+    .muted, .caption { color: #b8c4d5; font-size: 14px; line-height: 1.6; }
+    .switcher { display: flex; gap: 8px; }
+    .switcher button { font-size: 14px; }
+    .switcher button[aria-pressed="true"] { border-color: #e0c48b; color: #f4dca5; background: #303044; }
+    .frame { width: 100%; max-width: 1080px; margin: auto; container-type: inline-size; }
+    .frame.compact-preview { max-width: 390px; }
+    .app { height: min(760px, calc(100dvh - 160px)); min-height: 470px; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; border: 1px solid #526077; border-radius: 14px; overflow: hidden; background: radial-gradient(ellipse at 80% 0, #243849, transparent 65%), #111b2c; box-shadow: 0 16px 60px #0006; }
+    .game-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid #465168; gap: 12px; }
+    .game-header h2 { font-size: 24px; }
+    .breadcrumb { font-size: 14px; color: #c9ad79; margin-bottom: 3px; }
+    .wallet { text-align: right; font-variant-numeric: tabular-nums; }
+    .wallet strong { display: block; font-size: 20px; }
+    .categories { display: flex; gap: 8px; padding: 12px 18px; border-bottom: 1px solid #38445b; }
+    .categories button { flex: 1; max-width: 200px; }
+    .categories [aria-pressed="true"] { border-color: #dbbf84; color: #f3d99f; background: #2c3345; }
+    .main { min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+    .inventory { min-height: 0; padding: 16px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+    .section-label { color: #bac6d8; font-size: 14px; margin: 0 0 10px 4px; }
+    .items { display: grid; gap: 8px; }
+    .item { width: 100%; display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; text-align: left; min-height: 76px; border-color: #39485f; background: #111c2e; }
+    .item[aria-pressed="true"] { border-color: #e7ca8c; background: #29374b; box-shadow: inset 3px 0 #e7ca8c; }
+    .icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9px; background: #283c45; color: #b8e4d2; font-size: 20px; }
+    .item-name { display: block; overflow-wrap: anywhere; line-height: 1.45; }
+    .item-sub { display: block; font-size: 14px; color: #b9c6d7; margin-top: 3px; }
+    .count { font-size: 16px; white-space: nowrap; font-variant-numeric: tabular-nums; color: #eed49c; }
+    .detail { border-left: 1px solid #465168; padding: 24px; display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow-y: auto; background: #121e30; }
+    .detail h3 { font-size: 24px; overflow-wrap: anywhere; }
+    .description { line-height: 1.8; }
+    .facts { display: flex; gap: 12px; flex-wrap: wrap; font-size: 14px; color: #c5d2e3; }
+    .facts span { padding: 6px 10px; background: #243146; border-radius: 4px; }
+    .party-summary { padding-top: 14px; border-top: 1px solid #39485f; }
+    .party-summary h4 { margin: 0 0 10px; color: #d2b780; font-size: 14px; }
+    .summary-row { display: flex; justify-content: space-between; gap: 10px; margin: 8px 0; font-size: 16px; font-variant-numeric: tabular-nums; }
+    .action-area { margin-top: auto; display: grid; gap: 8px; }
+    .primary { background: #e1c48a; color: #1b202b; border-color: #f4dcaa; font-weight: 700; }
+    .primary:hover:not(:disabled) { background: #f0d6a2; }
+    .game-footer { border-top: 1px solid #465168; padding: 10px 18px max(10px, env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 14px; }
+    .game-footer button { min-width: 96px; }
+    .caption { max-width: 1080px; margin: 12px auto 0; }
+    dialog { color: #f1f4f8; width: min(520px, calc(100% - 24px)); max-height: calc(100dvh - 32px); border: 1px solid #9c8966; border-radius: 14px; padding: 0; background: #142035; overflow: hidden; }
+    dialog::backdrop { background: #030813bb; }
+    .sheet { display: flex; flex-direction: column; max-height: calc(100dvh - 36px); }
+    .sheet-header { padding: 20px 20px 12px; }
+    .sheet-header h2 { font-size: 22px; margin-bottom: 6px; overflow-wrap: anywhere; }
+    .targets { display: grid; gap: 8px; padding: 8px 20px; overflow-y: auto; min-height: 0; }
+    .target { text-align: left; display: grid; grid-template-columns: 1fr auto; gap: 8px; min-height: 84px; }
+    .target[aria-pressed="true"] { border-color: #ecd092; background: #2a3a50; }
+    .target small { color: #c6d3e3; font-size: 14px; }
+    .target .meter { grid-column: 1 / -1; height: 5px; background: #0c1423; border-radius: 3px; overflow: hidden; }
+    .meter span { display: block; height: 100%; background: #8dcfbd; }
+    .sheet-footer { padding: 12px 20px max(18px, env(safe-area-inset-bottom)); display: grid; gap: 10px; border-top: 1px solid #465168; }
+    .sheet-footer .buttons { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+    .feedback { font-size: 16px; color: #c4eadb; min-height: 24px; line-height: 1.5; }
+    @container (max-width: 719px) {
+      .game-header { padding: 12px 16px; }
+      .game-header h2 { font-size: 22px; }
+      .categories { padding: 10px 12px; }
+      .categories button { padding: 8px; font-size: 16px; max-width: none; }
+      .main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(120px, 1fr) auto; }
+      .inventory { padding: 12px; }
+      .item { min-height: 72px; padding: 10px; }
+      .detail { border-left: 0; border-top: 1px solid #526077; padding: 14px 16px; gap: 8px; max-height: 240px; }
+      .detail h3 { font-size: 20px; }
+      .description { font-size: 18px; line-height: 1.6; }
+      .facts, .party-summary, .action-hint { display: none; }
+      .game-footer { padding: 8px 12px max(8px, env(safe-area-inset-bottom)); gap: 10px; }
+      .game-footer .muted { font-size: 14px; }
+    }
+    @media (max-width: 600px) {
+      body { padding-top: max(12px, env(safe-area-inset-top)); }
+      h1 { font-size: 18px; }
+      .intro { gap: 8px; }
+      .intro .muted { display: none; }
+      .switcher { width: 100%; }
+      .switcher button { flex: 1; }
+      .app { height: calc(100dvh - 156px); }
+    }
+    dialog.compact-sheet { margin: auto auto 0; border-radius: 14px 14px 0 0; }
+    @media (prefers-reduced-motion: no-preference) {
+      button { transition: background-color .12s ease; }
+    }
+  </style>
+</head>
+<body>
+  <header class="intro">
+    <div><p class="eyebrow">JRPG ADAPTIVE UI / DESIGN STUDY 01</p><h1>見渡せるPC。迷わず押せるスマホ。</h1><p class="muted">道具画面の操作見本・ゲームとは独立したダミーデータ</p></div>
+    <nav class="switcher" aria-label="見本の表示幅">
+      <button type="button" id="wide" aria-pressed="true">PC / 自動</button>
+      <button type="button" id="compact" aria-pressed="false">縦型スマホ</button>
+    </nav>
+  </header>
+  <div class="frame" id="frame">
+    <section class="app" aria-label="道具画面の見本">
+      <header class="game-header">
+        <div><p class="breadcrumb">旅のメニュー / 道具</p><h2>道具袋</h2></div>
+        <div class="wallet"><span class="muted">所持金</span><strong>2,450 G</strong></div>
+      </header>
+      <nav class="categories" aria-label="道具の分類">
+        <button type="button" data-category="usable" aria-pressed="true">使う道具</button>
+        <button type="button" data-category="key" aria-pressed="false">大事なもの</button>
+      </nav>
+      <div class="main">
+        <section class="inventory" aria-label="道具一覧" tabindex="0">
+          <p class="section-label">選択して効果を確認</p>
+          <div class="items" id="items"></div>
+        </section>
+        <section class="detail" aria-label="選択中の道具" tabindex="0">
+          <p class="eyebrow">ITEM DETAILS</p>
+          <h3 id="item-title"></h3>
+          <p class="description" id="description"></p>
+          <div class="facts"><span id="scope"></span><span id="stock"></span></div>
+          <div class="party-summary"><h4>仲間の状態</h4><div id="summary"></div></div>
+          <div class="action-area"><button class="primary" type="button" id="use">使用する</button><p class="muted action-hint">次に使う相手を選びます。まだ消費しません。</p></div>
+        </section>
+      </div>
+      <footer class="game-footer"><button type="button" id="back">← 戻る</button><p class="muted" id="guide" role="status">道具を選び、「使用する」で対象選択へ。</p></footer>
+    </section>
+  </div>
+  <p class="caption">PCは一覧と詳細を並列表示。狭い画面では一列＋下部操作欄に切替。Tabで移動、Enterで操作、対象選択はEscで戻れます。<a href="jrpg-ui-proposal.md">設計提案書</a> · この見本に他のゲーム画面は含まれません。</p>
+  <dialog id="target-dialog" aria-labelledby="target-title" aria-describedby="target-help">
+    <div class="sheet">
+      <header class="sheet-header"><p class="eyebrow">SELECT TARGET</p><h2 id="target-title"></h2><p class="muted" id="target-help">対象を選び、下のボタンで使用します。</p></header>
+      <div class="targets" id="targets"></div>
+      <footer class="sheet-footer">
+        <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
+        <div class="buttons"><button type="button" id="cancel">戻る</button><button type="button" class="primary" id="confirm">この仲間に使う</button></div>
+      </footer>
+    </div>
+  </dialog>
+  <script>
+    "use strict";
+    // Visual prototype only. No engine access, network, persistence or game assets.
+    const items = [
+      { id: "potion", name: "ポーション", short: "HPを150回復", description: "仲間ひとりのHPを150回復する。", count: 8, icon: "✦", stat: "hp", amount: 150, category: "usable" },
+      { id: "ether", name: "エーテル", short: "MPを30回復", description: "仲間ひとりのMPを30回復する。", count: 3, icon: "◇", stat: "mp", amount: 30, category: "usable" },
+      { id: "herb", name: "薬草", short: "HPを50回復", description: "仲間ひとりのHPを50回復する。小さな傷の手当に。", count: 12, icon: "❧", stat: "hp", amount: 50, category: "usable" },
+      { id: "elixir", name: "ハイポーション", short: "HPを500回復・残り1個", description: "仲間ひとりのHPを500回復する。", count: 1, icon: "✧", stat: "hp", amount: 500, category: "usable" },
+      { id: "empty", name: "魔力のしずく", short: "MPを80回復・所持なし", description: "仲間ひとりのMPを80回復する。現在は持っていない。", count: 0, icon: "◈", stat: "mp", amount: 80, category: "usable" },
+      { id: "long", name: "旅人のための特製回復薬", short: "長い名前の表示確認", description: "仲間ひとりのHPを200回復する。長い説明は文字を縮小せず折り返す。必要な場合は説明欄を縦にスクロールして全文を読める。", count: 2, icon: "✦", stat: "hp", amount: 200, category: "usable" },
+      { id: "key", name: "古びた鍵", short: "イベント用・使用不可", description: "古い扉を開くための鍵。メニューからは使用できない。", count: 1, icon: "⚿", category: "key" }
+    ];
+    const party = [
+      { id: "a", name: "仲間A", job: "剣士", hp: 240, maxHp: 620, mp: 24, maxMp: 40 },
+      { id: "b", name: "仲間B", job: "魔法使い", hp: 180, maxHp: 380, mp: 12, maxMp: 96 },
+      { id: "c", name: "仲間C", job: "僧侶", hp: 410, maxHp: 410, mp: 38, maxMp: 80 },
+      { id: "d", name: "仲間D", job: "狩人", hp: 310, maxHp: 510, mp: 18, maxMp: 30 }
+    ];
+    const $ = id => document.getElementById(id);
+    let category = "usable";
+    let selectedId = "potion";
+    let targetId = "a";
+    const currentItem = () => items.find(item => item.id === selectedId);
+    const maximum = (actor, stat) => actor[stat === "hp" ? "maxHp" : "maxMp"];
+
+    function renderSummary() {
+      $("summary").innerHTML = party.map(actor => `<div class="summary-row"><span>${actor.name} / ${actor.job}</span><span>HP ${actor.hp}/${actor.maxHp}</span></div>`).join("");
+    }
+    function renderDetail() {
+      const item = currentItem();
+      $("item-title").textContent = item.name;
+      $("description").textContent = item.description;
+      $("scope").textContent = item.stat ? "対象：仲間ひとり" : "イベント用";
+      $("stock").textContent = `所持数：${item.count}`;
+      $("use").disabled = !item.stat || item.count === 0;
+      $("use").textContent = !item.stat ? "メニューでは使用できません" : item.count === 0 ? "所持していません" : "使用する → 対象を選ぶ";
+      renderSummary();
+    }
+    function renderList() {
+      $("items").innerHTML = items.filter(item => item.category === category).map(item => `<button type="button" class="item" data-item="${item.id}" aria-pressed="${item.id === selectedId}"><span class="icon" aria-hidden="true">${item.icon}</span><span><span class="item-name">${item.name}</span><span class="item-sub">${item.short}</span></span><span class="count">×${item.count}</span></button>`).join("");
+    }
+    function selectItem(id) {
+      selectedId = id;
+      for (const button of $("items").querySelectorAll("button")) button.setAttribute("aria-pressed", String(button.dataset.item === id));
+      renderDetail();
+    }
+    $("items").addEventListener("click", event => {
+      const button = event.target.closest("[data-item]");
+      if (button) selectItem(button.dataset.item);
+    });
+    $("items").addEventListener("keydown", event => {
+      if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
+      const buttons = [...$("items").querySelectorAll("button")];
+      const index = buttons.indexOf(event.target);
+      if (index < 0) return;
+      event.preventDefault();
+      const next = buttons[(index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length];
+      next.focus();
+      selectItem(next.dataset.item);
+    });
+    for (const button of document.querySelectorAll("[data-category]")) {
+      button.addEventListener("click", () => {
+        category = button.dataset.category;
+        selectedId = items.find(item => item.category === category).id;
+        for (const sibling of document.querySelectorAll("[data-category]")) sibling.setAttribute("aria-pressed", String(sibling === button));
+        renderList();
+        renderDetail();
+      });
+    }
+    function updateConfirmation() {
+      const item = currentItem();
+      const actor = party.find(member => member.id === targetId);
+      const full = actor[item.stat] >= maximum(actor, item.stat);
+      $("confirm").disabled = item.count === 0 || full;
+      $("confirm").textContent = item.count === 0 ? "所持していません" : full ? `${item.stat.toUpperCase()}は満タンです` : `${actor.name}に使う`;
+    }
+    function renderTargets() {
+      const item = currentItem();
+      $("target-title").textContent = `${item.name} · 残り${item.count}個`;
+      $("targets").innerHTML = party.map(actor => {
+        const value = actor[item.stat];
+        const max = maximum(actor, item.stat);
+        return `<button type="button" class="target" data-target="${actor.id}" aria-pressed="${actor.id === targetId}"><span>${actor.name} <small>${actor.job}</small></span><small>${item.stat.toUpperCase()} ${value}/${max}</small><span class="meter" aria-hidden="true"><span style="width:${100 * value / max}%"></span></span></button>`;
+      }).join("");
+      updateConfirmation();
+    }
+    $("use").addEventListener("click", () => {
+      const item = currentItem();
+      if (!item.stat || item.count === 0) return;
+      targetId = (party.find(actor => actor[item.stat] < maximum(actor, item.stat)) || party[0]).id;
+      $("feedback").textContent = "選択だけでは道具は消費されません。";
+      renderTargets();
+      $("target-dialog").classList.toggle("compact-sheet", $("frame").clientWidth < 720);
+      $("target-dialog").showModal();
+      $("targets").querySelector(`[data-target="${targetId}"]`).focus();
+    });
+    $("targets").addEventListener("click", event => {
+      const button = event.target.closest("[data-target]");
+      if (!button) return;
+      targetId = button.dataset.target;
+      for (const sibling of $("targets").querySelectorAll("button")) sibling.setAttribute("aria-pressed", String(sibling === button));
+      $("feedback").textContent = "対象を選択しました。下のボタンで使用します。";
+      updateConfirmation();
+    });
+    $("confirm").addEventListener("click", () => {
+      const item = currentItem();
+      const actor = party.find(member => member.id === targetId);
+      if (item.count <= 0 || !item.stat || actor[item.stat] >= maximum(actor, item.stat)) return;
+      const amount = Math.min(item.amount, maximum(actor, item.stat) - actor[item.stat]);
+      actor[item.stat] += amount;
+      item.count -= 1;
+      renderTargets();
+      renderList();
+      renderDetail();
+      $("feedback").textContent = `${actor.name}の${item.stat.toUpperCase()}が${amount}回復しました。残り${item.count}個。`;
+      if ($("confirm").disabled) $("cancel").focus();
+    });
+    $("cancel").addEventListener("click", () => $("target-dialog").close());
+    $("target-dialog").addEventListener("close", () => {
+      if (!$("use").disabled) $("use").focus();
+      else $("items").querySelector(`[data-item="${selectedId}"]`).focus();
+    });
+    $("back").addEventListener("click", () => {
+      $("guide").textContent = "ここでメニューに戻る設計です。この見本は道具画面のみです。";
+    });
+    for (const id of ["wide", "compact"]) {
+      $(id).addEventListener("click", () => {
+        $("frame").classList.toggle("compact-preview", id === "compact");
+        $("wide").setAttribute("aria-pressed", String(id === "wide"));
+        $("compact").setAttribute("aria-pressed", String(id === "compact"));
+      });
+    }
+    // Keep an open sheet positioned correctly when the preview is resized.
+    new ResizeObserver(() => {
+      $("target-dialog").classList.toggle("compact-sheet", $("frame").clientWidth < 720);
+    }).observe($("frame"));
+    renderList();
+    renderDetail();
+  </script>
+</body>
+</html>
