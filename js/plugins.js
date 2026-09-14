@@ -4,5 +4,6 @@ var $plugins =
 [
 {"name":"VerticalDisplayFullscreen","status":true,"description":"Expands map and battle visuals for portrait screens while keeping the PC-style UI centered.","parameters":{"PortraitOnly":"true","MaxScreenHeight":"1800","DesktopPortraitPreview":"true"}},
 {"name":"MobileTouchControls","status":true,"description":"Adds on-screen controls for touch devices.","parameters":{}},
+{"name":"PlayerMoveSpeedOptions","status":true,"description":"Adds walking and running speed settings to the options menu.","parameters":{"MinSpeed":"3","MaxSpeed":"6","DefaultWalkSpeed":"4","DefaultDashSpeed":"5"}},
 {"name":"LicenseNotice","status":true,"description":"Adds a credits and licenses item to the title menu.","parameters":{}}
 ];
