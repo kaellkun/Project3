@@ -37,6 +37,11 @@
     };
 
     const margin = 6;
+    const compactFaceSize = 64;
+
+    const compactSkillStatusHeight = scene => {
+        return Math.max(compactFaceSize + margin * 2, scene.calcWindowHeight(2, false));
+    };
 
     // Helper to refresh window geometry cleanly
     const setWindowRect = (win, x, y, width, height) => {
@@ -61,6 +66,72 @@
 
     Window_ActorCommand.prototype.maxCols = function() {
         return Math.min(4, this._list ? Math.max(1, this._list.length) : 4);
+    };
+
+    Window_SkillType.prototype.maxCols = function() {
+        return Math.min(6, this._list ? Math.max(1, this._list.length) : 3);
+    };
+
+    Window_SkillType.prototype.itemTextAlign = function() {
+        return "center";
+    };
+
+    Window_SkillStatus.prototype.refresh = function() {
+        Window_StatusBase.prototype.refresh.call(this);
+        if (this._actor) {
+            const faceSize = Math.min(compactFaceSize, Math.max(1, this.innerHeight - margin * 2));
+            const faceY = Math.floor((this.innerHeight - faceSize) / 2);
+            const textX = faceSize + this.itemPadding() + margin * 2;
+            const textWidth = Math.max(1, this.innerWidth - textX - this.itemPadding());
+            const textY = Math.floor((this.innerHeight - this.lineHeight() * 2) / 2);
+            this.drawActorFace(this._actor, this.itemPadding(), faceY, faceSize, faceSize);
+            this.drawActorName(this._actor, textX, textY, textWidth);
+            this.drawActorClass(this._actor, textX, textY + this.lineHeight(), textWidth);
+        }
+    };
+
+    const _Window_MenuActor_itemHeight = Window_MenuActor.prototype.itemHeight;
+    Window_MenuActor.prototype.itemHeight = function() {
+        if (this._flexSkillTargetModal) {
+            return compactFaceSize + margin * 2;
+        }
+        return _Window_MenuActor_itemHeight.call(this);
+    };
+
+    const _Window_MenuActor_drawItem = Window_MenuActor.prototype.drawItem;
+    Window_MenuActor.prototype.drawItem = function(index) {
+        if (!this._flexSkillTargetModal) {
+            _Window_MenuActor_drawItem.call(this, index);
+            return;
+        }
+        this.drawPendingItemBackground(index);
+        const actor = this.actor(index);
+        const rect = this.itemRect(index);
+        const faceSize = Math.min(compactFaceSize, Math.max(1, rect.height - margin * 2));
+        const faceY = rect.y + Math.floor((rect.height - faceSize) / 2);
+        const textX = rect.x + faceSize + this.itemPadding() + margin * 2;
+        const textWidth = Math.max(1, rect.width - (textX - rect.x) - this.itemPadding());
+        const textY = rect.y + Math.floor((rect.height - this.lineHeight() * 2) / 2);
+        this.changePaintOpacity(actor.isBattleMember());
+        this.drawActorFace(actor, rect.x + this.itemPadding(), faceY, faceSize, faceSize);
+        this.changePaintOpacity(true);
+        this.drawActorName(actor, textX, textY, textWidth);
+        this.drawActorClass(actor, textX, textY + this.lineHeight(), textWidth);
+    };
+
+    const positionSkillActorModal = scene => {
+        const win = scene._actorWindow;
+        if (!win) return;
+        const boxW = Graphics.boxWidth;
+        const boxH = Graphics.boxHeight;
+        const rows = Math.max(1, Math.min($gameParty.size(), 4));
+        const wh = Math.min(win.itemHeight() * rows + win.padding * 2, boxH - margin * 6);
+        const ww = Math.min(boxW - margin * 4, Math.max(360, Math.floor(boxW * 0.58)));
+        const wx = Math.floor((boxW - ww) / 2);
+        const wy = Math.floor((boxH - wh) / 2);
+        setWindowRect(win, wx, wy, ww, wh);
+        win.createContents();
+        win.refresh();
     };
 
     //-----------------------------------------------------------------------------
@@ -175,33 +246,60 @@
     const _Scene_Skill_create = Scene_Skill.prototype.create;
     Scene_Skill.prototype.create = function() {
         _Scene_Skill_create.call(this);
+        if (this._actorWindow) {
+            this._actorWindow._flexSkillTargetModal = true;
+        }
         this.relayoutSkillWindows();
     };
 
+    Scene_Skill.prototype.skillTypeWindowRect = function() {
+        const wx = margin;
+        const wy = margin;
+        const ww = Graphics.boxWidth - margin * 2;
+        const wh = this.calcWindowHeight(1, true);
+        return new Rectangle(wx, wy, ww, wh);
+    };
+
+    Scene_Skill.prototype.statusWindowRect = function() {
+        const wx = margin;
+        const wy = this._skillTypeWindow.y + this._skillTypeWindow.height + margin;
+        const ww = Graphics.boxWidth - margin * 2;
+        const wh = compactSkillStatusHeight(this);
+        return new Rectangle(wx, wy, ww, wh);
+    };
+
+    Scene_Skill.prototype.itemWindowRect = function() {
+        const helpH = this._helpWindow ? this._helpWindow.height : 72;
+        const wx = margin;
+        const wy = this._statusWindow.y + this._statusWindow.height + margin;
+        const ww = Graphics.boxWidth - margin * 2;
+        const wh = Graphics.boxHeight - wy - helpH - margin * 2;
+        return new Rectangle(wx, wy, ww, wh);
+    };
+
     Scene_Skill.prototype.relayoutSkillWindows = function() {
-        const portrait = isPortraitLayout();
         const boxW = Graphics.boxWidth;
         const boxH = Graphics.boxHeight;
 
         const helpH = this._helpWindow ? this._helpWindow.height : 72;
-        const skillTypeH = this._skillTypeWindow ? this._skillTypeWindow.height : 52;
+        const skillTypeH = this.calcWindowHeight(1, true);
+        const statusH = compactSkillStatusHeight(this);
 
         setWindowRect(this._skillTypeWindow, margin, margin, boxW - margin * 2, skillTypeH);
         setWindowRect(this._helpWindow, margin, boxH - helpH - margin, boxW - margin * 2, helpH);
 
-        const topY = skillTypeH + margin * 2;
-        const availableH = boxH - topY - helpH - margin * 2;
+        const statusY = skillTypeH + margin * 2;
+        const itemY = statusY + statusH + margin;
+        const itemH = Math.max(1, boxH - itemY - helpH - margin * 2);
+        setWindowRect(this._statusWindow, margin, statusY, boxW - margin * 2, statusH);
+        setWindowRect(this._itemWindow, margin, itemY, boxW - margin * 2, itemH);
+        positionSkillActorModal(this);
+    };
 
-        if (portrait) {
-            setWindowRect(this._itemWindow, margin, topY, boxW - margin * 2, availableH);
-            const sheetH = Math.floor(boxH * 0.45);
-            setWindowRect(this._actorWindow, margin, boxH - helpH - sheetH - margin * 2, boxW - margin * 2, sheetH);
-        } else {
-            const leftW = Math.floor((boxW - margin * 3) * 0.55);
-            const rightW = boxW - leftW - margin * 3;
-            setWindowRect(this._itemWindow, margin, topY, leftW, availableH);
-            setWindowRect(this._actorWindow, leftW + margin * 2, topY, rightW, availableH);
-        }
+    Scene_Skill.prototype.showActorWindow = function() {
+        positionSkillActorModal(this);
+        this._actorWindow.show();
+        this._actorWindow.activate();
     };
 
     //-----------------------------------------------------------------------------
@@ -262,6 +360,14 @@
 
     Scene_Battle.prototype.actorCommandWindowRect = function() {
         return this.partyCommandWindowRect();
+    };
+
+    Scene_Battle.prototype.logWindowRect = function() {
+        const ww = Graphics.boxWidth - margin * 2;
+        const wh = this.calcWindowHeight(10, false);
+        const wx = margin;
+        const wy = this.calcWindowHeight(1, true) + margin;
+        return new Rectangle(wx, wy, ww, wh);
     };
 
     Scene_Battle.prototype.statusWindowRect = function() {
@@ -325,6 +431,9 @@
         // Screen Top-aligned Commands (y = 0)
         setWindowRect(this._partyCommandWindow, 0, 0, boxW, cmdH);
         setWindowRect(this._actorCommandWindow, 0, 0, boxW, cmdH);
+
+        // Battle log sits directly below the active command row.
+        setWindowRect(this._logWindow, margin, cmdH + margin, boxW - margin * 2, this.calcWindowHeight(10, false));
 
         // Screen Bottom-aligned Status (Fixed Operation Area at the Bottom)
         setWindowRect(this._statusWindow, margin, boxH - statusH - margin, boxW - margin * 2, statusH);

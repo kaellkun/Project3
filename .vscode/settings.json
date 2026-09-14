@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^git diff --check && node -e 'const fs=require\\(\"fs\"\\),vm=require\\(\"vm\"\\); const html=fs\\.readFileSync\\(\"docs/ui/ui-preview\\.html\",\"utf8\"\\); for\\(const \\[,source\\] of html\\.matchAll\\(/<script>\\(\\[\\\\s\\\\S\\]\\*\\?\\)<\\\\/script>/g\\)\\) new vm\\.Script\\(source\\); console\\.log\\(\"Preview JavaScript syntax: OK\"\\);' && git status --short$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

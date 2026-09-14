@@ -90,7 +90,7 @@
         controlsEnabled = true;
         style.textContent = `
             html, body { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: none; }
-            #mobileTouchControls { --mtc-size: clamp(72px, 21vw, 104px); --mtc-gap: clamp(2px, 1vw, 6px); --mtc-edge: max(16px, env(safe-area-inset-right)); --mtc-bottom: max(54px, env(safe-area-inset-bottom)); position: fixed; inset: 0; z-index: 20; pointer-events: none; touch-action: none; }
+            #mobileTouchControls { --mtc-size: clamp(72px, 21vw, 104px); --mtc-gap: clamp(2px, 1vw, 6px); --mtc-edge: max(10px, env(safe-area-inset-right)); --mtc-bottom: max(30px, env(safe-area-inset-bottom)); position: fixed; inset: 0; z-index: 20; pointer-events: none; touch-action: none; }
             #mobileTouchControls .mtc-touch-blocker { position: absolute; right: 0; bottom: 0; width: min(58vw, calc(var(--mtc-size) * 3.25)); height: calc(var(--mtc-bottom) + var(--mtc-size) * 2.12); background: transparent; pointer-events: auto; touch-action: none; }
             #mobileTouchControls button { position: absolute; z-index: 1; width: var(--mtc-size); height: var(--mtc-size); border: 3px solid rgba(255, 255, 255, 0.7); border-radius: 50%; background: rgba(17, 24, 39, 0.58); color: #ffffff; font: 700 clamp(22px, 6vw, 38px) sans-serif; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
             #mobileTouchControls button:active { background: rgba(14, 116, 144, 0.9); transform: scale(0.94); }
