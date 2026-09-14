@@ -19,6 +19,7 @@ not grant rights to redistribute third-party game assets separately.
 ## Enabled Plugins
 
 - MobileTouchControls.js: Copyright (c) 2026 kaellkun.
+- Keke_SpeedStarBattle.js: Copyright (c) 2021 ケケー. Released under the MIT License. https://opensource.org/licenses/mit-license.php
 - LicenseNotice.js: Copyright (c) 2026 kaellkun.
 
 The project folder also includes the RPG Maker MZ default plugins
