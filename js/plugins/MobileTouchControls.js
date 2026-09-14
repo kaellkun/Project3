@@ -25,14 +25,17 @@
         escape: false,
         menu: false
     };
+    let controlsEnabled = false;
 
     const originalInputUpdate = Input.update;
     Input.update = function() {
-        for (const keyName in touchState) {
-            if (touchState[keyName]) {
-                this._currentState[keyName] = true;
-            } else if (this._currentState[keyName]) {
-                this._currentState[keyName] = false;
+        if (controlsEnabled) {
+            for (const keyName in touchState) {
+                if (touchState[keyName]) {
+                    this._currentState[keyName] = true;
+                } else if (this._currentState[keyName]) {
+                    this._currentState[keyName] = false;
+                }
             }
         }
         originalInputUpdate.call(this);
@@ -50,6 +53,7 @@
         }
 
         const style = document.createElement("style");
+        controlsEnabled = true;
         style.textContent = `
             #mobileTouchControls { position: fixed; inset: 0; z-index: 20; pointer-events: none; touch-action: none; }
             #mobileTouchControls button { position: absolute; width: 58px; height: 58px; border: 2px solid rgba(255, 255, 255, 0.7); border-radius: 50%; background: rgba(17, 24, 39, 0.58); color: #ffffff; font: 700 16px sans-serif; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
