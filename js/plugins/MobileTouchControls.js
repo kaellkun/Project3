@@ -55,17 +55,18 @@
         const style = document.createElement("style");
         controlsEnabled = true;
         style.textContent = `
-            #mobileTouchControls { position: fixed; inset: 0; z-index: 20; pointer-events: none; touch-action: none; }
-            #mobileTouchControls button { position: absolute; width: 58px; height: 58px; border: 2px solid rgba(255, 255, 255, 0.7); border-radius: 50%; background: rgba(17, 24, 39, 0.58); color: #ffffff; font: 700 16px sans-serif; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
+            html, body { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: none; }
+            #mobileTouchControls { --mtc-size: clamp(120px, 35vw, 200px); position: fixed; inset: 0; z-index: 20; pointer-events: none; touch-action: none; }
+            #mobileTouchControls button { position: absolute; width: var(--mtc-size); height: var(--mtc-size); border: 4px solid rgba(255, 255, 255, 0.7); border-radius: 50%; background: rgba(17, 24, 39, 0.58); color: #ffffff; font: 700 clamp(32px, 8vw, 56px) sans-serif; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
             #mobileTouchControls button:active { background: rgba(14, 116, 144, 0.9); transform: scale(0.94); }
-            #mobileTouchControls .mtc-up { left: 58px; bottom: 126px; }
-            #mobileTouchControls .mtc-left { left: 0; bottom: 68px; }
-            #mobileTouchControls .mtc-down { left: 58px; bottom: 68px; }
-            #mobileTouchControls .mtc-right { left: 116px; bottom: 68px; }
-            #mobileTouchControls .mtc-menu { right: 18px; top: 18px; width: 54px; height: 42px; border-radius: 8px; font-size: 12px; }
-            #mobileTouchControls .mtc-ok { right: 28px; bottom: 96px; width: 68px; height: 68px; background: rgba(5, 111, 146, 0.7); }
-            #mobileTouchControls .mtc-cancel { right: 100px; bottom: 48px; width: 52px; height: 52px; font-size: 14px; }
-            @media (max-width: 500px) { #mobileTouchControls button { width: 52px; height: 52px; } #mobileTouchControls .mtc-up { left: 52px; bottom: 112px; } #mobileTouchControls .mtc-left { bottom: 60px; } #mobileTouchControls .mtc-down { left: 52px; bottom: 60px; } #mobileTouchControls .mtc-right { left: 104px; bottom: 60px; } #mobileTouchControls .mtc-ok { right: 22px; bottom: 84px; width: 62px; height: 62px; } #mobileTouchControls .mtc-cancel { right: 88px; bottom: 42px; } }
+            #mobileTouchControls .mtc-up { left: var(--mtc-size); bottom: calc(var(--mtc-size) * 2.1); }
+            #mobileTouchControls .mtc-left { left: 0; bottom: var(--mtc-size); }
+            #mobileTouchControls .mtc-down { left: var(--mtc-size); bottom: var(--mtc-size); }
+            #mobileTouchControls .mtc-right { left: calc(var(--mtc-size) * 2); bottom: var(--mtc-size); }
+            #mobileTouchControls .mtc-menu { right: 36px; top: 36px; width: 180px; height: 110px; border-radius: 12px; font-size: 32px; }
+            #mobileTouchControls .mtc-ok { right: 56px; bottom: calc(var(--mtc-size) * 1.4); width: calc(var(--mtc-size) * 1.2); height: calc(var(--mtc-size) * 1.2); background: rgba(5, 111, 146, 0.7); }
+            #mobileTouchControls .mtc-cancel { right: calc(var(--mtc-size) * 1.9); bottom: calc(var(--mtc-size) * 0.7); width: calc(var(--mtc-size) * 0.9); height: calc(var(--mtc-size) * 0.9); font-size: 36px; }
+            @media (orientation: portrait) { #mobileTouchControls { --mtc-size: clamp(100px, 31vw, 140px); } #mobileTouchControls .mtc-menu { right: 20px; top: 20px; width: 120px; height: 72px; font-size: 22px; } #mobileTouchControls .mtc-ok { right: 28px; } }
         `;
         document.head.appendChild(style);
 
