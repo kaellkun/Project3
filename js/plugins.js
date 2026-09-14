@@ -10,5 +10,6 @@ var $plugins =
 {"name":"MainFontLetterSpacing","status":true,"description":"Adjusts the letter spacing of the main game font.","parameters":{"HiraganaSpacing":"-9.00","KatakanaSpacing":"-10.00","KanjiSpacing":"-8.00","LatinNumberSpacing":"-2.00","LetterSpacing":"-2.00"}},
 {"name":"HideTouchBackMenuButtons","status":true,"description":"タッチ操作用の戻るボタンとメニューボタンを非表示にします。","parameters":{}},
 {"name":"FlexibleTopDownUI","status":true,"description":"Responsive UI layout: Horizontal top-aligned commands & bottom-aligned help window for PC and Mobile.","parameters":{"MobileBreakpointWidth":"640"}},
-{"name":"DisableMouseMapClickMove","status":true,"description":"Prevents mouse-originated clicks from moving the player on the map.","parameters":{}}
+{"name":"DisableMouseMapClickMove","status":true,"description":"Prevents mouse-originated clicks from moving the player on the map.","parameters":{}},
+{"name":"ShieldBreakSystem","status":true,"description":"敵のシールドブレイクと、敵画像上部の弱点表示UI v1.0.0","parameters":{"DefaultShield":"3","DefaultWeakElements":"1","BreakTurns":"1","BreakDamageRate":"2","RevealWeaknesses":"true","UiOffsetY":"12"}}
 ];

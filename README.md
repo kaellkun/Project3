@@ -1,5 +1,10 @@
 # Project3
 
+## シールドブレイク
+
+敵のシールドブレイクと弱点表示UIを導入しています。DBタグなしでも動作します。
+設定方法は [シールドブレイクの説明](docs/shield-break-system.md) を参照してください。
+
 ## Copyright and License Notice
 
 Copyright (c) 2026 kaellkun.

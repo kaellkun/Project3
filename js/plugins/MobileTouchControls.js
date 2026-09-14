@@ -9,8 +9,11 @@
  *
  * @help MobileTouchControls.js
  *
- * Displays a direction pad and OK, cancel, and menu buttons on touch devices.
- * Keyboard and gamepad controls continue to work normally.
+ * Displays an eight-way joystick surrounded by four direction buttons.
+ * Drag the stick to move, or hold a direction button. Tap the stick center
+ * for OK. X cancels/opens the menu; L/R switch pages where available.
+ * Touch directions support diagonal map movement using MZ collision checks.
+ * Menus, keyboard, gamepad, and map-tap movement keep their normal behavior.
  */
 
 (() => {
@@ -27,9 +30,19 @@
         pageup: false,
         pagedown: false
     };
+    const directionKeys = ["up", "down", "left", "right"];
+    const stickState = {};
+    const buttonState = {};
     const appliedTouchState = {};
     let controlsEnabled = false;
     let resetControls = () => {};
+
+    // Keep independent owners: releasing the stick must not release a held D-pad.
+    const syncTouchState = () => {
+        for (const keyName in touchState) {
+            touchState[keyName] = !!(stickState[keyName] || buttonState[keyName]);
+        }
+    };
 
     Input.keyMapper[33] = null;
     Input.keyMapper[34] = null;
@@ -68,6 +81,33 @@
         originalInputUpdate.call(this);
     };
 
+    const originalGetInputDirection = Game_Player.prototype.getInputDirection;
+    Game_Player.prototype.getInputDirection = function() {
+        if (controlsEnabled && directionKeys.some(key => touchState[key])) {
+            return Input.dir8;
+        }
+        return originalGetInputDirection.call(this);
+    };
+
+    const originalExecuteMove = Game_Player.prototype.executeMove;
+    Game_Player.prototype.executeMove = function(direction) {
+        if (![1, 3, 7, 9].includes(direction)) {
+            return originalExecuteMove.call(this, direction);
+        }
+        const horz = direction === 1 || direction === 7 ? 4 : 6;
+        const vert = direction === 1 || direction === 3 ? 2 : 8;
+        // Use the player's native movement to preserve collision and followers.
+        this.moveDiagonally(horz, vert);
+        if (!this.isMovementSucceeded()) {
+            // Slide along a wall, retaining normal touch-event checks if blocked.
+            const primary = Input.dir4 === vert ? vert : horz;
+            const secondary = primary === horz ? vert : horz;
+            const fallback = this.canPass(this.x, this.y, primary) ? primary :
+                this.canPass(this.x, this.y, secondary) ? secondary : primary;
+            originalExecuteMove.call(this, fallback);
+        }
+    };
+
     const clearTouchState = () => {
         resetControls();
         for (const keyName in touchState) {
@@ -90,19 +130,24 @@
         controlsEnabled = true;
         style.textContent = `
             html, body { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: none; }
-            #mobileTouchControls { --mtc-size: clamp(72px, 21vw, 104px); --mtc-gap: clamp(2px, 1vw, 6px); --mtc-edge: max(10px, env(safe-area-inset-right)); --mtc-bottom: max(30px, env(safe-area-inset-bottom)); position: fixed; inset: 0; z-index: 20; pointer-events: none; touch-action: none; }
-            #mobileTouchControls .mtc-touch-blocker { position: absolute; right: 0; bottom: 0; width: min(58vw, calc(var(--mtc-size) * 3.25)); height: calc(var(--mtc-bottom) + var(--mtc-size) * 2.12); background: transparent; pointer-events: auto; touch-action: none; }
+            #mobileTouchControls { --mtc-size: clamp(72px, 21vw, 104px); --mtc-gap: 4px; --mtc-stick-size: clamp(96px, 30vw, 128px); --mtc-direction-size: clamp(44px, 12vw, 48px); --mtc-pad-size: calc(var(--mtc-stick-size) + var(--mtc-direction-size) * 2 + var(--mtc-gap) * 2); --mtc-edge: max(10px, env(safe-area-inset-right)); --mtc-bottom: max(30px, env(safe-area-inset-bottom)); position: fixed; inset: 0; z-index: 20; pointer-events: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+            #mobileTouchControls .mtc-touch-blocker { position: absolute; right: 0; bottom: 0; width: calc(var(--mtc-edge) + var(--mtc-pad-size)); height: calc(var(--mtc-bottom) + var(--mtc-pad-size)); background: transparent; pointer-events: auto; touch-action: none; }
+            #mobileTouchControls .mtc-movement-pad { position: absolute; z-index: 1; right: var(--mtc-edge); bottom: var(--mtc-bottom); display: grid; grid-template: var(--mtc-direction-size) var(--mtc-stick-size) var(--mtc-direction-size) / var(--mtc-direction-size) var(--mtc-stick-size) var(--mtc-direction-size); gap: var(--mtc-gap); pointer-events: none; }
             #mobileTouchControls button { position: absolute; z-index: 1; width: var(--mtc-size); height: var(--mtc-size); border: 3px solid rgba(255, 255, 255, 0.7); border-radius: 50%; background: rgba(17, 24, 39, 0.58); color: #ffffff; font: 700 clamp(22px, 6vw, 38px) sans-serif; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
-            #mobileTouchControls button:active { background: rgba(14, 116, 144, 0.9); transform: scale(0.94); }
-            #mobileTouchControls .mtc-stick { position: absolute; z-index: 1; right: calc(var(--mtc-edge) + var(--mtc-size) * 0.18 + var(--mtc-gap)); bottom: calc(var(--mtc-bottom) - 16px); width: calc(var(--mtc-size) * 1.62); height: calc(var(--mtc-size) * 1.62); border: 3px solid rgba(255, 255, 255, 0.55); border-radius: 50%; background: rgba(17, 24, 39, 0.42); box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.08); pointer-events: auto; touch-action: none; }
+            #mobileTouchControls button:active, #mobileTouchControls button.is-pressed { background: rgba(14, 116, 144, 0.9); transform: scale(0.94); }
+            #mobileTouchControls .mtc-direction { position: relative; box-sizing: border-box; align-self: center; justify-self: center; width: var(--mtc-direction-size); height: var(--mtc-direction-size); padding: 0; border-radius: 14px; font-size: 24px; }
+            #mobileTouchControls .mtc-up { grid-area: 1 / 2; }
+            #mobileTouchControls .mtc-down { grid-area: 3 / 2; }
+            #mobileTouchControls .mtc-left { grid-area: 2 / 1; }
+            #mobileTouchControls .mtc-right { grid-area: 2 / 3; }
+            #mobileTouchControls .mtc-stick { position: relative; grid-area: 2 / 2; box-sizing: border-box; width: var(--mtc-stick-size); height: var(--mtc-stick-size); border: 3px solid rgba(255, 255, 255, 0.55); border-radius: 50%; background: rgba(17, 24, 39, 0.42); box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.08); pointer-events: auto; touch-action: none; }
             #mobileTouchControls .mtc-stick::before, #mobileTouchControls .mtc-stick::after { content: ""; position: absolute; background: rgba(255, 255, 255, 0.22); }
             #mobileTouchControls .mtc-stick::before { top: 12%; bottom: 12%; left: 50%; width: 2px; }
             #mobileTouchControls .mtc-stick::after { right: 12%; left: 12%; top: 50%; height: 2px; }
             #mobileTouchControls .mtc-stick-knob { position: absolute; left: 50%; top: 50%; width: 52%; height: 52%; border: 3px solid rgba(255, 255, 255, 0.8); border-radius: 50%; background: rgba(5, 111, 146, 0.72); color: #ffffff; display: grid; place-items: center; font: 700 clamp(12px, 4vw, 22px) sans-serif; transform: translate(-50%, -50%); pointer-events: none; }
-            #mobileTouchControls .mtc-cancel { right: var(--mtc-edge); bottom: calc(var(--mtc-bottom) + var(--mtc-size) * 1.32 + var(--mtc-gap)); width: calc(var(--mtc-size) * 0.72); height: calc(var(--mtc-size) * 0.72); font-size: clamp(20px, 5vw, 30px); }
-            #mobileTouchControls .mtc-page { display: none; left: var(--mtc-edge); bottom: var(--mtc-bottom); width: calc(var(--mtc-size) * 0.84); height: calc(var(--mtc-size) * 0.84); }
-            #mobileTouchControls .mtc-pageup { left: var(--mtc-edge); }
-            #mobileTouchControls .mtc-pagedown { left: calc(var(--mtc-edge) + var(--mtc-size) + var(--mtc-gap)); }
+            #mobileTouchControls .mtc-cancel { right: var(--mtc-edge); bottom: calc(var(--mtc-bottom) + var(--mtc-pad-size) - var(--mtc-direction-size)); width: var(--mtc-direction-size); height: var(--mtc-direction-size); padding: 0; font-size: 24px; }
+            #mobileTouchControls .mtc-page { display: none; left: max(10px, env(safe-area-inset-left)); bottom: var(--mtc-bottom); width: calc(var(--mtc-size) * 0.84); height: calc(var(--mtc-size) * 0.84); }
+            #mobileTouchControls .mtc-pageup { bottom: calc(var(--mtc-bottom) + var(--mtc-size) * 0.84 + var(--mtc-gap)); }
             #mobileTouchControls .mtc-page.is-visible { display: block; }
         `;
         document.head.appendChild(style);
@@ -124,11 +169,15 @@
             blocker.addEventListener(eventName, consumePointerEvent);
         }
         container.appendChild(blocker);
+        const movementPad = document.createElement("div");
+        movementPad.className = "mtc-movement-pad";
+        container.appendChild(movementPad);
         const stick = document.createElement("div");
         const stickKnob = document.createElement("div");
         let stickPointerId = null;
         let stickMoved = false;
         const stickDirectionThreshold = 0.24;
+        const stickSectors = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
         stick.className = "mtc-stick";
         stickKnob.className = "mtc-stick-knob";
         stickKnob.textContent = "OK";
@@ -142,31 +191,43 @@
             const distanceY = event.clientY - centerY;
             const limit = rect.width * 0.28;
             const distance = Math.hypot(distanceX, distanceY);
-            if (distance > rect.width * stickDirectionThreshold) {
+            const outsideDeadZone = distance > rect.width * stickDirectionThreshold;
+            if (outsideDeadZone) {
                 stickMoved = true;
             }
             const knobX = distance > limit ? (distanceX / distance) * limit : distanceX;
             const knobY = distance > limit ? (distanceY / distance) * limit : distanceY;
             stickKnob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
-            touchState.left = distanceX < -rect.width * stickDirectionThreshold;
-            touchState.right = distanceX > rect.width * stickDirectionThreshold;
-            touchState.up = distanceY < -rect.height * stickDirectionThreshold;
-            touchState.down = distanceY > rect.height * stickDirectionThreshold;
+            // Equal 45-degree sectors make diagonals accessible just outside
+            // the circular dead zone, rather than requiring two axis thresholds.
+            const sector = (Math.round(Math.atan2(distanceY, distanceX) / (Math.PI / 4)) + 8) % 8;
+            const [x, y] = outsideDeadZone ? stickSectors[sector] : [0, 0];
+            stickState.left = x < 0;
+            stickState.right = x > 0;
+            stickState.up = y < 0;
+            stickState.down = y > 0;
+            syncTouchState();
         };
         const resetStick = () => {
             const pointerId = stickPointerId;
             stickPointerId = null;
             stickMoved = false;
-            touchState.up = false;
-            touchState.down = false;
-            touchState.left = false;
-            touchState.right = false;
+            for (const key of directionKeys) {
+                stickState[key] = false;
+            }
+            syncTouchState();
             stickKnob.style.transform = "translate(-50%, -50%)";
             if (pointerId !== null && stick.hasPointerCapture(pointerId)) {
                 stick.releasePointerCapture(pointerId);
             }
         };
-        resetControls = resetStick;
+        const buttonResets = [];
+        resetControls = () => {
+            resetStick();
+            for (const reset of buttonResets) {
+                reset();
+            }
+        };
         const releaseStick = event => {
             if (stickPointerId === null || event.pointerId !== stickPointerId) {
                 return;
@@ -202,8 +263,12 @@
         stick.addEventListener("lostpointercapture", releaseStick);
         document.addEventListener("pointerup", releaseStick, true);
         document.addEventListener("pointercancel", releaseStick, true);
-        container.appendChild(stick);
+        movementPad.appendChild(stick);
         const buttons = [
+            ["up", "mtc-direction mtc-up", "↑"],
+            ["down", "mtc-direction mtc-down", "↓"],
+            ["left", "mtc-direction mtc-left", "←"],
+            ["right", "mtc-direction mtc-right", "→"],
             ["escape", "mtc-cancel", "X"],
             ["pageup", "mtc-page mtc-pageup", "L"],
             ["pagedown", "mtc-page mtc-pagedown", "R"]
@@ -215,19 +280,62 @@
             button.className = className;
             button.textContent = label;
             button.setAttribute("aria-label", keyName);
+            const pointers = new Set();
+            const updateButton = () => {
+                const pressed = pointers.size > 0;
+                buttonState[keyName] = pressed;
+                button.classList.toggle("is-pressed", pressed);
+                button.setAttribute("aria-pressed", String(pressed));
+                syncTouchState();
+            };
+            const resetButton = () => {
+                const captured = [...pointers];
+                pointers.clear();
+                updateButton();
+                for (const pointerId of captured) {
+                    if (button.hasPointerCapture(pointerId)) {
+                        button.releasePointerCapture(pointerId);
+                    }
+                }
+            };
+            buttonResets.push(resetButton);
+            updateButton();
             const press = event => {
                 consumePointerEvent(event);
-                touchState[keyName] = true;
+                if (event.button !== 0) {
+                    return;
+                }
+                pointers.add(event.pointerId);
+                try {
+                    button.setPointerCapture(event.pointerId);
+                } catch (error) {
+                    // Document release handlers also support editor previews.
+                }
+                updateButton();
             };
             const release = event => {
+                if (!pointers.has(event.pointerId)) {
+                    return;
+                }
                 consumePointerEvent(event);
-                touchState[keyName] = false;
+                pointers.delete(event.pointerId);
+                updateButton();
+                if (button.hasPointerCapture(event.pointerId)) {
+                    button.releasePointerCapture(event.pointerId);
+                }
             };
             button.addEventListener("pointerdown", press);
             button.addEventListener("pointerup", release);
             button.addEventListener("pointercancel", release);
-            button.addEventListener("pointerleave", release);
-            container.appendChild(button);
+            button.addEventListener("lostpointercapture", release);
+            button.addEventListener("pointerleave", event => {
+                if (!button.hasPointerCapture(event.pointerId)) {
+                    release(event);
+                }
+            });
+            document.addEventListener("pointerup", release, true);
+            document.addEventListener("pointercancel", release, true);
+            (directionKeys.includes(keyName) ? movementPad : container).appendChild(button);
         }
         const pageButtons = [
             container.querySelector(".mtc-pageup"),
