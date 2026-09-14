@@ -27,7 +27,7 @@
         pageup: false,
         pagedown: false
     };
-    const keyboardState = {};
+    const appliedTouchState = {};
     let controlsEnabled = false;
 
     Input.keyMapper[33] = null;
@@ -36,43 +36,6 @@
     Input.keyMapper[87] = "pagedown";
     Input.keyMapper[76] = "pageup";
     Input.keyMapper[82] = "pagedown";
-
-    const buttonNameFromKeyboardEvent = event => {
-        if (Input.keyMapper[event.keyCode]) {
-            return Input.keyMapper[event.keyCode];
-        }
-        switch (event.key || event.code) {
-            case "ArrowUp":
-                return "up";
-            case "ArrowDown":
-                return "down";
-            case "ArrowLeft":
-                return "left";
-            case "ArrowRight":
-                return "right";
-            case " ":
-            case "Enter":
-            case "z":
-            case "Z":
-            case "KeyZ":
-                return "ok";
-            case "Escape":
-            case "x":
-            case "X":
-            case "KeyX":
-                return "escape";
-            case "l":
-            case "L":
-            case "KeyL":
-                return "pageup";
-            case "r":
-            case "R":
-            case "KeyR":
-                return "pagedown";
-            default:
-                return null;
-        }
-    };
 
     const consumePointerEvent = event => {
         event.preventDefault();
@@ -83,35 +46,22 @@
     Input.clear = function() {
         originalInputClear.call(this);
         for (const keyName in touchState) {
-            keyboardState[keyName] = false;
+            touchState[keyName] = false;
+            appliedTouchState[keyName] = false;
         }
     };
-
-    document.addEventListener("keydown", event => {
-        const buttonName = buttonNameFromKeyboardEvent(event);
-        if (buttonName && buttonName in touchState) {
-            keyboardState[buttonName] = true;
-        }
-    });
-
-    document.addEventListener("keyup", event => {
-        const buttonName = buttonNameFromKeyboardEvent(event);
-        if (buttonName && buttonName in touchState) {
-            keyboardState[buttonName] = false;
-        }
-    });
-
-    window.addEventListener("blur", () => {
-        for (const keyName in keyboardState) {
-            keyboardState[keyName] = false;
-        }
-    });
 
     const originalInputUpdate = Input.update;
     Input.update = function() {
         if (controlsEnabled) {
             for (const keyName in touchState) {
-                this._currentState[keyName] = !!keyboardState[keyName] || touchState[keyName];
+                const pressed = touchState[keyName];
+                if (pressed) {
+                    this._currentState[keyName] = true;
+                } else if (appliedTouchState[keyName]) {
+                    this._currentState[keyName] = false;
+                }
+                appliedTouchState[keyName] = pressed;
             }
         }
         originalInputUpdate.call(this);
