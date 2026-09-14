@@ -142,13 +142,12 @@
             #mobileTouchControls .mtc-touch-blocker { position: absolute; right: 0; bottom: 0; width: min(58vw, calc(var(--mtc-size) * 3.25)); height: calc(var(--mtc-bottom) + var(--mtc-size) * 2.12); background: transparent; pointer-events: auto; touch-action: none; }
             #mobileTouchControls button { position: absolute; z-index: 1; width: var(--mtc-size); height: var(--mtc-size); border: 3px solid rgba(255, 255, 255, 0.7); border-radius: 50%; background: rgba(17, 24, 39, 0.58); color: #ffffff; font: 700 clamp(22px, 6vw, 38px) sans-serif; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
             #mobileTouchControls button:active { background: rgba(14, 116, 144, 0.9); transform: scale(0.94); }
-            #mobileTouchControls .mtc-stick { position: absolute; z-index: 1; right: calc(var(--mtc-edge) + var(--mtc-size) * 0.84 + var(--mtc-gap)); bottom: calc(var(--mtc-bottom) - 16px); width: calc(var(--mtc-size) * 1.42); height: calc(var(--mtc-size) * 1.42); border: 3px solid rgba(255, 255, 255, 0.55); border-radius: 50%; background: rgba(17, 24, 39, 0.42); box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.08); pointer-events: auto; touch-action: none; }
+            #mobileTouchControls .mtc-stick { position: absolute; z-index: 1; right: calc(var(--mtc-edge) + var(--mtc-size) * 0.18 + var(--mtc-gap)); bottom: calc(var(--mtc-bottom) - 16px); width: calc(var(--mtc-size) * 1.62); height: calc(var(--mtc-size) * 1.62); border: 3px solid rgba(255, 255, 255, 0.55); border-radius: 50%; background: rgba(17, 24, 39, 0.42); box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.08); pointer-events: auto; touch-action: none; }
             #mobileTouchControls .mtc-stick::before, #mobileTouchControls .mtc-stick::after { content: ""; position: absolute; background: rgba(255, 255, 255, 0.22); }
             #mobileTouchControls .mtc-stick::before { top: 12%; bottom: 12%; left: 50%; width: 2px; }
             #mobileTouchControls .mtc-stick::after { right: 12%; left: 12%; top: 50%; height: 2px; }
-            #mobileTouchControls .mtc-stick-knob { position: absolute; left: 50%; top: 50%; width: 43%; height: 43%; border: 3px solid rgba(255, 255, 255, 0.8); border-radius: 50%; background: rgba(5, 111, 146, 0.72); transform: translate(-50%, -50%); pointer-events: none; }
-            #mobileTouchControls .mtc-ok { right: var(--mtc-edge); bottom: var(--mtc-bottom); width: calc(var(--mtc-size) * 0.84); height: calc(var(--mtc-size) * 0.84); background: rgba(5, 111, 146, 0.7); }
-            #mobileTouchControls .mtc-cancel { right: var(--mtc-edge); bottom: calc(var(--mtc-bottom) + var(--mtc-size) * 0.84 + var(--mtc-gap)); width: calc(var(--mtc-size) * 0.72); height: calc(var(--mtc-size) * 0.72); font-size: clamp(20px, 5vw, 30px); }
+            #mobileTouchControls .mtc-stick-knob { position: absolute; left: 50%; top: 50%; width: 52%; height: 52%; border: 3px solid rgba(255, 255, 255, 0.8); border-radius: 50%; background: rgba(5, 111, 146, 0.72); color: #ffffff; display: grid; place-items: center; font: 700 clamp(12px, 4vw, 22px) sans-serif; transform: translate(-50%, -50%); pointer-events: none; }
+            #mobileTouchControls .mtc-cancel { right: var(--mtc-edge); bottom: calc(var(--mtc-bottom) + var(--mtc-size) * 1.32 + var(--mtc-gap)); width: calc(var(--mtc-size) * 0.72); height: calc(var(--mtc-size) * 0.72); font-size: clamp(20px, 5vw, 30px); }
             #mobileTouchControls .mtc-page { display: none; left: var(--mtc-edge); bottom: var(--mtc-bottom); width: calc(var(--mtc-size) * 0.84); height: calc(var(--mtc-size) * 0.84); }
             #mobileTouchControls .mtc-pageup { left: var(--mtc-edge); }
             #mobileTouchControls .mtc-pagedown { left: calc(var(--mtc-edge) + var(--mtc-size) + var(--mtc-gap)); }
@@ -167,8 +166,10 @@
         const stick = document.createElement("div");
         const stickKnob = document.createElement("div");
         let stickActive = false;
+        let stickMoved = false;
         stick.className = "mtc-stick";
         stickKnob.className = "mtc-stick-knob";
+        stickKnob.textContent = "OK";
         stick.appendChild(stickKnob);
         const updateStick = event => {
             consumePointerEvent(event);
@@ -179,6 +180,9 @@
             const distanceY = event.clientY - centerY;
             const limit = rect.width * 0.28;
             const distance = Math.hypot(distanceX, distanceY);
+            if (distance > rect.width * 0.16) {
+                stickMoved = true;
+            }
             const knobX = distance > limit ? (distanceX / distance) * limit : distanceX;
             const knobY = distance > limit ? (distanceY / distance) * limit : distanceY;
             stickKnob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
@@ -188,8 +192,15 @@
             touchState.down = distanceY > rect.height * 0.16;
         };
         const releaseStick = event => {
+            if (!stickActive) {
+                return;
+            }
             consumePointerEvent(event);
+            if (event.type === "pointerup" && !stickMoved) {
+                Input.virtualClick("ok");
+            }
             stickActive = false;
+            stickMoved = false;
             touchState.up = false;
             touchState.down = false;
             touchState.left = false;
@@ -199,6 +210,7 @@
         stick.addEventListener("pointerdown", event => {
             consumePointerEvent(event);
             stickActive = true;
+            stickMoved = false;
             try {
                 stick.setPointerCapture(event.pointerId);
             } catch (error) {
@@ -225,7 +237,6 @@
         }, true);
         container.appendChild(stick);
         const buttons = [
-            ["ok", "mtc-ok", "OK"],
             ["escape", "mtc-cancel", "X"],
             ["pageup", "mtc-page mtc-pageup", "L"],
             ["pagedown", "mtc-page mtc-pagedown", "R"]

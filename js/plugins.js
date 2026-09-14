@@ -9,5 +9,5 @@ var $plugins =
 {"name":"LicenseNotice","status":true,"description":"Adds a credits and licenses item to the title menu.","parameters":{}},
 {"name":"DisableMouseMapClickMove","status":true,"description":"Prevents mouse-originated clicks from moving the player on the map.","parameters":{}},
 {"name":"MainFontLetterSpacing","status":true,"description":"Adjusts the letter spacing of the main game font.","parameters":{"HiraganaSpacing":"-9.00","KatakanaSpacing":"-10.00","KanjiSpacing":"-8.00","LatinNumberSpacing":"-2.00","LetterSpacing":"-2.00"}},
-{"name":"FlexibleTopDownUI","status":true,"description":"Responsive UI layout: Horizontal top-aligned commands & bottom-aligned help window for PC and Mobile.","parameters":{"MobileBreakpointWidth":"640"}}
+{"name":"HideTouchBackMenuButtons","status":true,"description":"タッチ操作用の戻るボタンとメニューボタンを非表示にします。","parameters":{}}
 ];
