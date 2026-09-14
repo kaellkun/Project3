@@ -59,24 +59,59 @@
             #mobileTouchControls { --mtc-size: clamp(120px, 35vw, 200px); position: fixed; inset: 0; z-index: 20; pointer-events: none; touch-action: none; }
             #mobileTouchControls button { position: absolute; width: var(--mtc-size); height: var(--mtc-size); border: 4px solid rgba(255, 255, 255, 0.7); border-radius: 50%; background: rgba(17, 24, 39, 0.58); color: #ffffff; font: 700 clamp(32px, 8vw, 56px) sans-serif; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
             #mobileTouchControls button:active { background: rgba(14, 116, 144, 0.9); transform: scale(0.94); }
-            #mobileTouchControls .mtc-up { left: var(--mtc-size); bottom: calc(var(--mtc-size) * 2.1); }
-            #mobileTouchControls .mtc-left { left: 0; bottom: var(--mtc-size); }
-            #mobileTouchControls .mtc-down { left: var(--mtc-size); bottom: var(--mtc-size); }
-            #mobileTouchControls .mtc-right { left: calc(var(--mtc-size) * 2); bottom: var(--mtc-size); }
-            #mobileTouchControls .mtc-menu { right: 36px; top: 36px; width: 180px; height: 110px; border-radius: 12px; font-size: 32px; }
-            #mobileTouchControls .mtc-ok { right: 56px; bottom: calc(var(--mtc-size) * 1.4); width: calc(var(--mtc-size) * 1.2); height: calc(var(--mtc-size) * 1.2); background: rgba(5, 111, 146, 0.7); }
-            #mobileTouchControls .mtc-cancel { right: calc(var(--mtc-size) * 1.9); bottom: calc(var(--mtc-size) * 0.7); width: calc(var(--mtc-size) * 0.9); height: calc(var(--mtc-size) * 0.9); font-size: 36px; }
-            @media (orientation: portrait) { #mobileTouchControls { --mtc-size: clamp(100px, 31vw, 140px); } #mobileTouchControls .mtc-menu { right: 20px; top: 20px; width: 120px; height: 72px; font-size: 22px; } #mobileTouchControls .mtc-ok { right: 28px; } }
+            #mobileTouchControls .mtc-stick { position: absolute; right: calc(var(--mtc-size) * 1.65); bottom: 28px; width: calc(var(--mtc-size) * 1.45); height: calc(var(--mtc-size) * 1.45); border: 5px solid rgba(255, 255, 255, 0.55); border-radius: 50%; background: rgba(17, 24, 39, 0.42); box-shadow: inset 0 0 0 12px rgba(255, 255, 255, 0.08); pointer-events: auto; touch-action: none; }
+            #mobileTouchControls .mtc-stick::before, #mobileTouchControls .mtc-stick::after { content: ""; position: absolute; background: rgba(255, 255, 255, 0.22); }
+            #mobileTouchControls .mtc-stick::before { top: 12%; bottom: 12%; left: 50%; width: 2px; }
+            #mobileTouchControls .mtc-stick::after { right: 12%; left: 12%; top: 50%; height: 2px; }
+            #mobileTouchControls .mtc-stick-knob { position: absolute; left: 50%; top: 50%; width: 43%; height: 43%; border: 4px solid rgba(255, 255, 255, 0.8); border-radius: 50%; background: rgba(5, 111, 146, 0.72); transform: translate(-50%, -50%); pointer-events: none; }
+            #mobileTouchControls .mtc-menu { right: 28px; bottom: calc(var(--mtc-size) * 1.65); width: 180px; height: 90px; border-radius: 12px; font-size: 28px; }
+            #mobileTouchControls .mtc-ok { right: 28px; bottom: 42px; width: calc(var(--mtc-size) * 1.2); height: calc(var(--mtc-size) * 1.2); background: rgba(5, 111, 146, 0.7); }
+            #mobileTouchControls .mtc-cancel { right: calc(var(--mtc-size) * 1.18); bottom: 26px; width: calc(var(--mtc-size) * 0.72); height: calc(var(--mtc-size) * 0.72); font-size: 36px; }
+            @media (orientation: portrait) { #mobileTouchControls { --mtc-size: clamp(100px, 31vw, 140px); } #mobileTouchControls .mtc-menu { right: 20px; bottom: calc(var(--mtc-size) * 1.55); width: 120px; height: 66px; font-size: 20px; } #mobileTouchControls .mtc-ok { right: 20px; bottom: 26px; } #mobileTouchControls .mtc-cancel { right: calc(var(--mtc-size) * 1.12); bottom: 18px; } #mobileTouchControls .mtc-stick { right: calc(var(--mtc-size) * 1.55); bottom: 18px; } }
         `;
         document.head.appendChild(style);
 
         const container = document.createElement("div");
         container.id = "mobileTouchControls";
+        const stick = document.createElement("div");
+        const stickKnob = document.createElement("div");
+        stick.className = "mtc-stick";
+        stickKnob.className = "mtc-stick-knob";
+        stick.appendChild(stickKnob);
+        const updateStick = event => {
+            const rect = stick.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const distanceX = event.clientX - centerX;
+            const distanceY = event.clientY - centerY;
+            const limit = rect.width * 0.28;
+            const distance = Math.hypot(distanceX, distanceY);
+            const knobX = distance > limit ? (distanceX / distance) * limit : distanceX;
+            const knobY = distance > limit ? (distanceY / distance) * limit : distanceY;
+            stickKnob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
+            touchState.left = distanceX < -rect.width * 0.16;
+            touchState.right = distanceX > rect.width * 0.16;
+            touchState.up = distanceY < -rect.height * 0.16;
+            touchState.down = distanceY > rect.height * 0.16;
+        };
+        const releaseStick = event => {
+            event.preventDefault();
+            touchState.up = false;
+            touchState.down = false;
+            touchState.left = false;
+            touchState.right = false;
+            stickKnob.style.transform = "translate(-50%, -50%)";
+        };
+        stick.addEventListener("pointerdown", event => {
+            event.preventDefault();
+            stick.setPointerCapture(event.pointerId);
+            updateStick(event);
+        });
+        stick.addEventListener("pointermove", updateStick);
+        stick.addEventListener("pointerup", releaseStick);
+        stick.addEventListener("pointercancel", releaseStick);
+        container.appendChild(stick);
         const buttons = [
-            ["up", "mtc-up", "^"],
-            ["left", "mtc-left", "<"],
-            ["down", "mtc-down", "v"],
-            ["right", "mtc-right", ">"],
             ["menu", "mtc-menu", "MENU"],
             ["ok", "mtc-ok", "OK"],
             ["escape", "mtc-cancel", "X"]
