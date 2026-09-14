@@ -18,6 +18,11 @@
  * @min 624
  * @default 1800
  *
+ * @param DesktopPortraitPreview
+ * @text Desktop Portrait Preview
+ * @type boolean
+ * @default true
+ *
  * @help VerticalDisplayFullscreen.js
  *
  * On portrait screens, this plugin keeps Graphics.boxWidth/boxHeight at the
@@ -34,6 +39,7 @@
     const parameters = PluginManager.parameters(pluginName);
     const portraitOnly = parameters.PortraitOnly !== "false";
     const maxScreenHeight = Number(parameters.MaxScreenHeight || 1800);
+    const desktopPortraitPreview = parameters.DesktopPortraitPreview !== "false";
     const boxMargin = 4;
 
     const setupViewport = () => {
@@ -49,12 +55,15 @@
 
     const viewportWidth = () => Math.max(1, window.visualViewport ? window.visualViewport.width : window.innerWidth);
     const viewportHeight = () => Math.max(1, window.visualViewport ? window.visualViewport.height : window.innerHeight);
+    const isPortrait = () => viewportHeight() >= viewportWidth();
+    const isNarrowPreview = () => desktopPortraitPreview && isPortrait() && viewportWidth() <= $dataSystem.advanced.uiAreaWidth;
+    const isExpandedDisplay = () => Utils.isMobileDevice() || isNarrowPreview();
 
     const shouldExpand = () => {
-        if (!Utils.isMobileDevice()) {
+        if (!isExpandedDisplay()) {
             return false;
         }
-        return !portraitOnly || viewportHeight() >= viewportWidth();
+        return !portraitOnly || isPortrait();
     };
 
     const visualScreenSize = () => {
@@ -69,6 +78,17 @@
 
 
     setupViewport();
+
+    const originalStretchWidth = Graphics._stretchWidth;
+    Graphics._stretchWidth = function() {
+        return isExpandedDisplay() ? viewportWidth() : originalStretchWidth.call(this);
+    };
+
+    const originalStretchHeight = Graphics._stretchHeight;
+    Graphics._stretchHeight = function() {
+        return isExpandedDisplay() ? viewportHeight() : originalStretchHeight.call(this);
+    };
+
     const keepPcUiBox = () => {
         Graphics.boxWidth = $dataSystem.advanced.uiAreaWidth - boxMargin * 2;
         Graphics.boxHeight = $dataSystem.advanced.uiAreaHeight - boxMargin * 2;
@@ -77,6 +97,7 @@
     const applyVisualScreenSize = () => {
         if (shouldExpand()) {
             const size = visualScreenSize();
+            Graphics._stretchEnabled = true;
             Graphics.resize(size.width, size.height);
         }
         keepPcUiBox();

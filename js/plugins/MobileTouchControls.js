@@ -33,8 +33,6 @@
             for (const keyName in touchState) {
                 if (touchState[keyName]) {
                     this._currentState[keyName] = true;
-                } else if (this._currentState[keyName]) {
-                    this._currentState[keyName] = false;
                 }
             }
         }
@@ -47,8 +45,14 @@
         }
     };
 
+    const isNarrowPortraitPreview = () => {
+        const width = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+        const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        return height >= width && width <= 816;
+    };
+
     const createControls = () => {
-        if (!window.matchMedia("(pointer: coarse)").matches) {
+        if (!window.matchMedia("(pointer: coarse)").matches && !isNarrowPortraitPreview()) {
             return;
         }
 
@@ -56,17 +60,16 @@
         controlsEnabled = true;
         style.textContent = `
             html, body { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: none; }
-            #mobileTouchControls { --mtc-size: clamp(120px, 35vw, 200px); position: fixed; inset: 0; z-index: 20; pointer-events: none; touch-action: none; }
-            #mobileTouchControls button { position: absolute; width: var(--mtc-size); height: var(--mtc-size); border: 4px solid rgba(255, 255, 255, 0.7); border-radius: 50%; background: rgba(17, 24, 39, 0.58); color: #ffffff; font: 700 clamp(32px, 8vw, 56px) sans-serif; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
+            #mobileTouchControls { --mtc-size: clamp(72px, 21vw, 104px); --mtc-gap: clamp(6px, 2vw, 12px); --mtc-edge: max(8px, env(safe-area-inset-right)); --mtc-bottom: max(8px, env(safe-area-inset-bottom)); position: fixed; inset: 0; z-index: 20; pointer-events: none; touch-action: none; }
+            #mobileTouchControls button { position: absolute; width: var(--mtc-size); height: var(--mtc-size); border: 3px solid rgba(255, 255, 255, 0.7); border-radius: 50%; background: rgba(17, 24, 39, 0.58); color: #ffffff; font: 700 clamp(22px, 6vw, 38px) sans-serif; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
             #mobileTouchControls button:active { background: rgba(14, 116, 144, 0.9); transform: scale(0.94); }
-            #mobileTouchControls .mtc-stick { position: absolute; right: calc(var(--mtc-size) * 1.65); bottom: 28px; width: calc(var(--mtc-size) * 1.45); height: calc(var(--mtc-size) * 1.45); border: 5px solid rgba(255, 255, 255, 0.55); border-radius: 50%; background: rgba(17, 24, 39, 0.42); box-shadow: inset 0 0 0 12px rgba(255, 255, 255, 0.08); pointer-events: auto; touch-action: none; }
+            #mobileTouchControls .mtc-stick { position: absolute; right: calc(var(--mtc-edge) + var(--mtc-size) * 0.84 + var(--mtc-gap)); bottom: var(--mtc-bottom); width: calc(var(--mtc-size) * 1.42); height: calc(var(--mtc-size) * 1.42); border: 3px solid rgba(255, 255, 255, 0.55); border-radius: 50%; background: rgba(17, 24, 39, 0.42); box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.08); pointer-events: auto; touch-action: none; }
             #mobileTouchControls .mtc-stick::before, #mobileTouchControls .mtc-stick::after { content: ""; position: absolute; background: rgba(255, 255, 255, 0.22); }
             #mobileTouchControls .mtc-stick::before { top: 12%; bottom: 12%; left: 50%; width: 2px; }
             #mobileTouchControls .mtc-stick::after { right: 12%; left: 12%; top: 50%; height: 2px; }
-            #mobileTouchControls .mtc-stick-knob { position: absolute; left: 50%; top: 50%; width: 43%; height: 43%; border: 4px solid rgba(255, 255, 255, 0.8); border-radius: 50%; background: rgba(5, 111, 146, 0.72); transform: translate(-50%, -50%); pointer-events: none; }
-            #mobileTouchControls .mtc-ok { right: 28px; bottom: 28px; width: calc(var(--mtc-size) * 1.2); height: calc(var(--mtc-size) * 1.2); background: rgba(5, 111, 146, 0.7); }
-            #mobileTouchControls .mtc-cancel { right: calc(var(--mtc-size) * 0.62); bottom: calc(var(--mtc-size) * 1.35); width: calc(var(--mtc-size) * 0.72); height: calc(var(--mtc-size) * 0.72); font-size: 36px; }
-            @media (orientation: portrait) { #mobileTouchControls { --mtc-size: clamp(100px, 31vw, 140px); } #mobileTouchControls .mtc-ok { right: 20px; bottom: 20px; } #mobileTouchControls .mtc-cancel { right: calc(var(--mtc-size) * 0.62); bottom: calc(var(--mtc-size) * 1.35); } #mobileTouchControls .mtc-stick { right: calc(var(--mtc-size) * 1.55); bottom: 18px; } }
+            #mobileTouchControls .mtc-stick-knob { position: absolute; left: 50%; top: 50%; width: 43%; height: 43%; border: 3px solid rgba(255, 255, 255, 0.8); border-radius: 50%; background: rgba(5, 111, 146, 0.72); transform: translate(-50%, -50%); pointer-events: none; }
+            #mobileTouchControls .mtc-ok { right: var(--mtc-edge); bottom: var(--mtc-bottom); width: calc(var(--mtc-size) * 0.84); height: calc(var(--mtc-size) * 0.84); background: rgba(5, 111, 146, 0.7); }
+            #mobileTouchControls .mtc-cancel { right: var(--mtc-edge); bottom: calc(var(--mtc-bottom) + var(--mtc-size) + var(--mtc-gap)); width: calc(var(--mtc-size) * 0.72); height: calc(var(--mtc-size) * 0.72); font-size: clamp(20px, 5vw, 30px); }
         `;
         document.head.appendChild(style);
 
