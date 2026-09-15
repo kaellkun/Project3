@@ -37,7 +37,8 @@ function setup(parameters = {}, { keke = false, plugin = true, topUi = true } = 
         };
         const Utils = { isOptionValid: () => false };
         const Graphics = { width: 816, height: 624, boxWidth: 816, boxHeight: 624 };
-        const ColorManager = { normalColor: () => '#fff', outlineColor: () => '#000' };
+        const ColorManager = { normalColor: () => '#fff', outlineColor: () => '#000',
+            textColor: n => ({ 1: '#20a0d6', 2: '#ff784c', 6: '#ffffa0' })[n] || '#fff' + n };
         const TextManager = { escapeStart: '%1 escapes', escapeFailure: 'Failed', partyName: '%1 party' };
         let pressed = false;
         const Input = { isLongPressed: () => false, isPressed: () => pressed };
@@ -68,25 +69,48 @@ function setup(parameters = {}, { keke = false, plugin = true, topUi = true } = 
             setHue(hue) { this.hue = hue; }
         }
         function Window() {}
-        Window.prototype.initialize = function() { this.children = []; this.openness = 255; };
+        Window.prototype.initialize = function() {
+            this.children = [];
+            this.openness = 255;
+            // Client area draw order: contentsBack, cursor, contents (installed Window layout).
+            this._contentsSprite = { name: 'contents' };
+            this._clientArea = {
+                children: [{ name: 'contentsBack' }, { name: 'cursor' }, this._contentsSprite],
+                getChildIndex(child) { return this.children.indexOf(child); },
+                setChildIndex(child, index) {
+                    this.children.splice(this.children.indexOf(child), 1);
+                    this.children.splice(index, 0, child);
+                }
+            };
+        };
         Window.prototype.move = function(x, y, width, height) { Object.assign(this, { x, y, width, height }); };
         Window.prototype.setTone = function() {};
         Window.prototype.update = function() {};
-        Window.prototype.addInnerChild = function(child) { this.children.push(child); return child; };
+        Window.prototype.addInnerChild = function(child) {
+            this.children.push(child);
+            this._clientArea.children.push(child);
+            return child;
+        };
         Object.defineProperties(Window.prototype, {
             innerWidth: { get() { return Math.max(0, this.width - 2 * this.padding); } },
             innerHeight: { get() { return Math.max(0, this.height - 2 * this.padding); } }
         });
         const imageCache = new Map();
+        const imageSizes = { face: [576, 288], character: [576, 384], bigCharacter: [144, 192] };
         function image(kind, name) {
             const key = kind + ':' + name;
-            if (!imageCache.has(key)) imageCache.set(key,
-                new Bitmap(kind === 'face' ? 576 : 180, kind === 'face' ? 288 : 90));
+            if (!imageCache.has(key)) {
+                const [width, height] = imageSizes[kind === 'character' && name.startsWith('$') ?
+                    'bigCharacter' : kind] || [180, 90];
+                imageCache.set(key, new Bitmap(width, height));
+            }
             return imageCache.get(key);
         }
         const ImageManager = {
             faceWidth: 144, faceHeight: 144,
             loadFace: name => image('face', name), loadEnemy: name => image('enemy', name),
+            loadCharacter: name => image('character', name),
+            isBigCharacter: name => /^[!$]*[$]/.test(name),
             loadSvEnemy: name => image('svEnemy', name), loadSystem: name => image('system', name)
         };
 
@@ -645,19 +669,21 @@ test('Window_Base subclass reserves layout once across nested rectangles and rel
         const { scene, window } = createTimeline();
         assert.ok(window instanceof Window_Base);
         assert.equal(scene.createdBaseWindows, true);
+        assert.equal(window.x, 6);
         assert.equal(window.y, 66);
-        assert.equal(window.height, 124);
+        assert.equal(window.height, 64);
         assert.equal(window.padding, 8);
-        assert.equal(window.width, 804);
+        assert.equal(window.width, 8 * 48 + 16, 'compact: only as wide as the preview chips');
+        assert.ok(window.width < Graphics.boxWidth / 2);
         for (const method of ['skillWindowRect', 'itemWindowRect', 'enemyWindowRect']) {
             const rect = scene[method]();
-            assert.equal(rect.y, 196);
+            assert.equal(rect.y, 136);
             assert.equal(rect.y + rect.height, 420, 'original list bottom is retained');
             assert.equal(scene._linearTimeRectDepth, 0);
         }
         assert.equal(scene.logWindowRect().height, 60);
         scene.relayoutBattleWindows();
-        assert.equal(scene._logWindow.y, 196);
+        assert.equal(scene._logWindow.y, 136);
         assert.ok(window.y + window.height < scene._logWindow.y);
     `);
 });
@@ -667,10 +693,11 @@ test('layout without top UI, narrow screen and ShowTimeline=false', () => {
         Graphics.boxWidth = 320;
         const { scene, window } = createTimeline();
         assert.equal(window.y, 6);
-        assert.equal(window.width, 308);
-        assert.equal(scene.skillWindowRect().y, 136);
+        assert.equal(window.width, 6 * 48 + 16);
+        assert.ok(window.x + window.width <= Graphics.boxWidth - 6);
+        assert.equal(scene.skillWindowRect().y, 76);
         window.update();
-        assert.equal(window._portraits.length, 3);
+        assert.equal(window._portraits.length, 6);
     `);
     setup({ ShowTimeline: 'false' })(`
         const { scene, window } = createTimeline();
@@ -680,34 +707,48 @@ test('layout without top UI, narrow screen and ShowTimeline=false', () => {
     `);
 });
 
-test('portraits wait for image readiness, crop faces, fit enemies and reuse repeated sprites', () => {
+test('walking sprites wait for image readiness, crop down-facing frames, fit enemies and reuse sprites', () => {
     setup()(`
         $dataSystem.optSideView = false;
         const { window } = createTimeline();
         window.update();
-        assert.equal(window.contents.fontFace, 'sans-serif');
         assert.equal(window.contents.fontSize, 14);
+        assert.equal(window.contents.fontFace, $gameSystem.mainFontFace(), 'letters use the game UI font');
         assert.equal(window._portraits.length, 8);
         const [first, repeated, enemySprite] = window._portraits;
-        assert.notEqual(first, repeated, 'repeated actor has independent portrait sprites');
+        assert.notEqual(first, repeated, 'repeated actor has independent sprites');
         assert.equal(first.bitmap, repeated.bitmap);
+        assert.equal(first.bitmap, ImageManager.loadCharacter(actor.characterName()), 'walking graphic, not face');
         assert.equal(first.visible, false);
         assert.equal(enemySprite.visible, false);
+        const contentsIndex = window._clientArea.getChildIndex(window._contentsSprite);
+        for (const sprite of window._portraits) {
+            assert.ok(window._clientArea.getChildIndex(sprite) < contentsIndex, 'sprites render under letters');
+            assert.ok(window._clientArea.getChildIndex(sprite) > 0, 'sprites render over chip backgrounds');
+        }
         const redraws = window.contents.clears;
         first.bitmap.ready = true;
         enemySprite.bitmap.ready = true;
         window.update();
         assert.equal(first.visible, true);
         assert.equal(enemySprite.visible, true);
-        assert.deepEqual(first.frame, [0, 144, 144, 144]);
+        const n = actor.characterIndex();
+        const pattern = [0, 1, 2, 1][Math.floor(window._tick / 10) % 4];
+        assert.deepEqual(first.frame, [((n % 4) * 3 + pattern) * 48, Math.floor(n / 4) * 4 * 48, 48, 48]);
+        assert.deepEqual(repeated.frame, [((n % 4) * 3 + 1) * 48, Math.floor(n / 4) * 4 * 48, 48, 48],
+            'only the head of the queue animates');
         assert.deepEqual(enemySprite.frame, [0, 0, 180, 90]);
-        near(first.scale.x, 42 / 144);
+        assert.equal(first.scale.x, 1, 'pixel art is not rescaled');
         near(enemySprite.scale.x, 42 / 180);
         assert.equal(window.contents.clears, redraws, 'readiness does not require signature invalidation');
         assert.equal(first.hue, 0);
-        for (let i = 0; i < 8; i++) window.update();
+        const frames = new Set();
+        for (let i = 0; i < 40; i++) { window.update(); frames.add(first.frame[0]); }
+        assert.equal(frames.size, 3, 'head steps through the three walking patterns');
         assert.equal(window._portraits[0], first);
         assert.equal(window.contents.clears, redraws);
+        assert.ok(window.contents.text.length > 0 &&
+            window.contents.text.every(args => args[0] === enemy._letter.trim()), 'only enemy letters, no names/labels');
         enemy.hide(); window.refreshOrder(); window.updatePortraits();
         assert.ok(window._portraits.every(s => !s._entry || s._entry.battler !== enemy));
         actor.setHp(0); window.refreshOrder(); window.updatePortraits();
@@ -715,7 +756,33 @@ test('portraits wait for image readiness, crop faces, fit enemies and reuse repe
     `);
 });
 
-test('side-view enemy images, hue, name/selection invalidation and timeline visibility', () => {
+test('big character sheets, enemy letters and chip colors', () => {
+    setup()(`
+        battle([200], [100, 50]);
+        assert.ok(enemies.every(e => e._plural && e._letter.trim()), 'installed troop letters (full-width table)');
+        assert.notEqual(enemies[0]._letter, enemies[1]._letter);
+        actor.setCharacterImage('$Hero', 5);
+        const { window } = createTimeline();
+        window.update();
+        const order = BattleManager.linearTimeOrder(8);
+        const sprite = window._portraits[0];
+        assert.equal(sprite.bitmap, ImageManager.loadCharacter('$Hero'));
+        sprite.bitmap.ready = true;
+        window.updatePortraits();
+        assert.deepEqual(sprite.frame.slice(1), [0, 48, 48], 'big sheet ignores the character index');
+        const letters = window.contents.text.map(args => args[0]);
+        assert.deepEqual(letters, order.filter(e => e.battler.isEnemy()).map(e => e.battler._letter.trim()));
+        assert.equal(new Set(letters).size, 2, 'both enemies are distinguished by letter');
+        for (const args of window.contents.text) assert.equal(args[5], 'right');
+        const fills = window.contentsBack.fills;
+        assert.equal(fills.filter(f => f[4] === '#20a0d6').length, order.filter(e => e.battler.isActor()).length * 2);
+        assert.equal(fills.filter(f => f[4] === '#ff784c').length, order.filter(e => e.battler.isEnemy()).length * 2);
+        assert.ok(fills.every(f => f[2] <= 48 && f[3] <= 48));
+        assert.equal(window.contents.fills.length, 0);
+    `);
+});
+
+test('side-view enemy images, hue, graphic/selection invalidation and timeline visibility', () => {
     setup()(`
         $dataSystem.optSideView = true;
         $dataEnemies[1].battlerHue = 75;
@@ -728,11 +795,18 @@ test('side-view enemy images, hue, name/selection invalidation and timeline visi
         window.updatePortraits(); assert.equal(sprite.visible, false);
         sprite.bitmap.width = 180;
         window.updatePortraits(); assert.equal(sprite.visible, true);
-        const redraws = window.contents.clears;
-        actor.setName('Renamed'); actor.select(); window.refreshOrder();
+        let redraws = window.contents.clears;
+        actor.setName('Renamed'); window.refreshOrder();
+        assert.equal(window.contents.clears, redraws, 'names are not displayed, so renaming does not redraw');
+        actor.setCharacterImage('Actor2', 3); window.refreshOrder();
         assert.equal(window.contents.clears, redraws + 1);
-        assert.ok(window.contents.text.some(args => args[0] === 'Renamed'));
-        assert.ok(window.contents.fills.some(args => args[4] === '#ffe08a'));
+        assert.equal(window._portraits[0].bitmap, ImageManager.loadCharacter('Actor2'));
+        redraws = window.contents.clears;
+        enemy.select(); window.refreshOrder();
+        assert.equal(window.contents.clears, redraws + 1);
+        assert.ok(window.contentsBack.fills.some(args => args[4] === '#ffffa0'), 'selected chip has a gold frame');
+        enemy.deselect(); window.refreshOrder();
+        assert.ok(!window.contentsBack.fills.some(args => args[4] === '#ffffa0'));
         $gameMessage.add('Busy'); window.update(); assert.equal(window.visible, false);
         $gameMessage.clear(); window.update(); assert.equal(window.visible, true);
         for (const phase of ['battleEnd', 'aborting']) {

@@ -35,8 +35,9 @@
  * On portrait screens, this plugin keeps Graphics.boxWidth/boxHeight at the
  * project's existing UI size, but expands Graphics.width/height to match the
  * browser display aspect. Map, battle backgrounds, pictures, weather, and
- * screen effects can then use the full vertical display area, while windows
- * remain centered in the original PC-style UI area.
+ * screen effects can then use the full vertical display area. Top-positioned
+ * message windows are anchored to the actual display top; other windows remain
+ * centered in the original PC-style UI area.
  */
 
 (() => {
@@ -149,5 +150,13 @@
             return Math.round((Graphics.height / this.tileHeight() / mapScale) * 16) / 16;
         }
         return originalScreenTileY.call(this);
+    };
+
+    const originalMessageUpdatePlacement = Window_Message.prototype.updatePlacement;
+    Window_Message.prototype.updatePlacement = function() {
+        originalMessageUpdatePlacement.call(this);
+        if (shouldExpand() && this._positionType === 0 && this.parent) {
+            this.y -= this.parent.y;
+        }
     };
 })();

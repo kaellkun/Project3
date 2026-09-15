@@ -169,22 +169,22 @@ test('message text keeps letter spacing between incremental flushes', () => {
     `);
 });
 
-test('message line spacing is added to each message line height', () => {
-    setup({ MessageLineSpacing: '6' })(`
+test('message line spacing multiplies each message line height', () => {
+    setup({ MessageLineSpacing: '1.4' })(`
         const message = Object.create(Window_Message.prototype);
         message.contents = bitmap;
         message.lineHeight = () => 36;
         const textState = { text: '一行目\\n二行目', index: 0 };
-        assert.equal(message.calcTextHeight(textState), 42);
+        assert.equal(message.calcTextHeight(textState), 50.4);
     `);
 });
 
 test('message window defaults to three lines including configured spacing', () => {
-    setup({ MessageLineSpacing: '6' })(`
+    setup({ MessageLineSpacing: '1.4' })(`
         const scene = Object.create(Scene_Message.prototype);
         scene.calcWindowHeight = lines => lines * 36 + 24;
         const rect = scene.messageWindowRect();
-        assert.equal(rect.height, 158);
+        assert.equal(rect.height, 183.2);
     `);
 });
 

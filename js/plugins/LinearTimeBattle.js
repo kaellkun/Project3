@@ -57,9 +57,10 @@
  * 反撃・強制行動・行動回数追加・行動不能は通常のMZ仕様を維持します。
  * 2倍は行動機会の頻度であり、スキルの攻撃ヒット数ではありません。
  *
- * UI: 左から現在/次の行動順。青=味方の顔、赤=敵の戦闘画像。
+ * UI: 上部コマンド下の小さなウィンドウに、左から近い順で表示。
+ * 味方は歩行グラフィック、敵は戦闘画像と識別文字(A/B)です。
+ * 青地=味方、赤地=敵。先頭は足踏みし、対象選択中は金枠になります。
  * 同じキャラも複数表示し、2回行動などが分かるようにします。
- * 名前と敵のA/B表記で同じ画像の敵も区別できます。
  * 未来の速度変更・死亡・復活・行動不能解除・強制行動は予測不能です。
  * 予測は現時点の状態から計算し、毎回更新します。
  *
@@ -204,8 +205,10 @@
         return result.slice(0, limit);
     };
 
-    const barHeight = 124;
+    const cell = 48;
+    const pad = 8;
     const gap = 6;
+    const barHeight = cell + pad * 2;
     const hasTopUi = () => PluginManager._scripts.includes("FlexibleTopDownUI");
     const timelineEnabled = () => enabled() && showTimeline;
     const top = scene => hasTopUi() ? scene.calcWindowHeight(1, true) + gap : gap;
@@ -235,18 +238,21 @@
         };
     }
 
+    const enemyLetter = enemy => enemy._plural && enemy._letter ? String(enemy._letter).trim() : "";
+    const walkPatterns = [0, 1, 2, 1];
+
+    // Compact chip bar: window skin frame, tinted chip backgrounds on contentsBack,
+    // walking/enemy sprites between contentsBack and contents, letters on contents.
     class Window_LinearTimeOrder extends Window_Base {
         constructor(rect) {
             super(rect);
-            this.opacity = 220;
             this._portraits = [];
             this._signature = "";
-            this._refreshTick = 0;
+            this._tick = 0;
         }
-        updatePadding() { this.padding = 8; }
+        updatePadding() { this.padding = pad; }
         resetFontSettings() {
             super.resetFontSettings();
-            this.contents.fontFace = "sans-serif";
             this.contents.fontSize = 14;
         }
         update() {
@@ -254,50 +260,55 @@
             this.visible = timelineEnabled() && !BattleManager.isBattleEnd() &&
                 !BattleManager.isAborting() && !$gameMessage.isBusy();
             if (!this.visible) return;
-            if (++this._refreshTick % 4 === 1) this.refreshOrder();
+            if (++this._tick % 4 === 1) this.refreshOrder();
             this.updatePortraits();
         }
         refreshOrder() {
-            const count = Math.min(previewCount, Math.max(1, Math.floor(this.innerWidth / 76)));
+            const count = Math.min(previewCount, Math.max(1, Math.floor(this.innerWidth / cell)));
             const order = BattleManager.linearTimeOrder(count);
             const signature = JSON.stringify(order.map(({ battler: b, label }) => [
-                b.isActor() ? "a" + b.actorId() : "e" + b.index(), label, b.name(),
-                b.isActor() ? b.faceName() : b.battlerName(),
-                b.isActor() ? b.faceIndex() : b.battlerHue(), b.isSelected()
+                b.isActor() ? "a" + b.actorId() : "e" + b.index(), label, b.isSelected(),
+                b.isActor() ? [b.characterName(), b.characterIndex()] :
+                    [b.battlerName(), b.battlerHue(), enemyLetter(b)]
             ]));
             if (signature === this._signature) return;
             this._signature = signature;
             this.contents.clear();
+            this.contentsBack.clear();
             this.resetFontSettings();
-            this.contents.textColor = "#e8edf7";
-            this.contents.drawText("行動順予測  →", 2, 0, 150, 20, "left");
-            this.contents.textColor = "#b9c8de";
-            this.contents.drawText("青:味方 / 赤:敵", 150, 0, Math.max(1, this.innerWidth - 152), 20, "right");
-            const width = Math.floor(this.innerWidth / Math.max(1, count));
             this._portraits.forEach(sprite => { sprite.visible = false; sprite._entry = null; });
             order.forEach((entry, index) => {
                 const b = entry.battler;
-                const x = index * width;
-                const color = b.isActor() ? "#58bbff" : "#ff797e";
-                this.contents.fillRect(x + 1, 23, width - 4, 83, "#152036");
-                this.contents.fillRect(x + 1, 23, width - 4, 2, b.isSelected() ? "#ffe08a" : color);
-                this.contents.fillRect(x + 1, 25, 2, 81, color);
-                this.contents.textColor = color;
-                this.contents.drawText(entry.label || String(index + 1), x + 4, 26, width - 10, 17, "center");
-                this.contents.textColor = "#ffffff";
-                this.contents.drawText(b.name(), x + 4, 88, width - 10, 17, "center");
+                const x = index * cell;
+                const color = ColorManager.textColor(b.isActor() ? 1 : 2);
+                const back = this.contentsBack;
+                back.paintOpacity = entry.label ? 120 : 64;
+                back.fillRect(x + 1, 1, cell - 2, cell - 2, color);
+                back.paintOpacity = 255;
+                back.fillRect(x + 1, cell - 3, cell - 2, 2, color);
+                if (b.isSelected()) {
+                    const gold = ColorManager.textColor(6);
+                    back.fillRect(x + 1, 1, cell - 2, 2, gold);
+                    back.fillRect(x + 1, cell - 3, cell - 2, 2, gold);
+                    back.fillRect(x + 1, 1, 2, cell - 2, gold);
+                    back.fillRect(x + cell - 3, 1, 2, cell - 2, gold);
+                }
+                if (!b.isActor() && enemyLetter(b)) {
+                    this.contents.drawText(enemyLetter(b), x, cell - 20, cell - 4, 18, "right");
+                }
                 let sprite = this._portraits[index];
                 if (!sprite) {
                     sprite = new Sprite();
                     sprite.anchor.set(0.5, 0.5);
                     this.addInnerChild(sprite);
+                    this._clientArea.setChildIndex(sprite, this._clientArea.getChildIndex(this._contentsSprite));
                     this._portraits[index] = sprite;
                 }
                 sprite._entry = entry;
-                sprite.x = x + width / 2;
-                sprite.y = 65;
-                sprite._portraitSize = Math.min(42, width - 12);
-                sprite.bitmap = b.isActor() ? ImageManager.loadFace(b.faceName()) :
+                sprite._index = index;
+                sprite.x = x + cell / 2;
+                sprite.y = cell / 2;
+                sprite.bitmap = b.isActor() ? ImageManager.loadCharacter(b.characterName()) :
                     ($gameSystem.isSideView() ? ImageManager.loadSvEnemy(b.battlerName()) : ImageManager.loadEnemy(b.battlerName()));
                 sprite.setHue(b.isActor() ? 0 : b.battlerHue());
             });
@@ -312,14 +323,20 @@
                 let height = bitmap.height;
                 let sx = 0;
                 let sy = 0;
+                let fit = cell - 6;
                 if (b.isActor()) {
-                    width = ImageManager.faceWidth;
-                    height = ImageManager.faceHeight;
-                    sx = b.faceIndex() % 4 * width;
-                    sy = Math.floor(b.faceIndex() / 4) * height;
+                    // Down-facing frame; only the head of the queue steps in place.
+                    const big = ImageManager.isBigCharacter(b.characterName());
+                    const n = big ? 0 : b.characterIndex();
+                    const pattern = sprite._index === 0 ? walkPatterns[Math.floor(this._tick / 10) % 4] : 1;
+                    width = bitmap.width / (big ? 3 : 12);
+                    height = bitmap.height / (big ? 4 : 8);
+                    sx = ((n % 4) * 3 + pattern) * width;
+                    sy = Math.floor(n / 4) * 4 * height;
+                    fit = cell;
                 }
                 sprite.setFrame(sx, sy, width, height);
-                sprite.scale.set(sprite._portraitSize / Math.max(width, height, 1));
+                sprite.scale.set(Math.min(1, fit / Math.max(width, height, 1)));
             }
         }
     }
@@ -327,8 +344,9 @@
     Scene_Battle.prototype.createAllWindows = function() {
         originalCreate.call(this);
         if (!timelineEnabled()) return;
+        const count = Math.min(previewCount, Math.max(1, Math.floor((Graphics.boxWidth - gap * 2 - pad * 2) / cell)));
         this._linearTimeOrderWindow = new Window_LinearTimeOrder(
-            new Rectangle(gap, top(this), Math.max(1, Graphics.boxWidth - gap * 2), barHeight));
+            new Rectangle(gap, top(this), count * cell + pad * 2, barHeight));
         this.addWindow(this._linearTimeOrderWindow);
     };
 })();

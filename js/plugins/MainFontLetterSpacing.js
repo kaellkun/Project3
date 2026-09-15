@@ -56,10 +56,10 @@
  * @text Message line spacing
  * @type number
  * @decimals 2
- * @min -20
+* @min 0
  * @max 20
- * @default 0
- * @desc Additional spacing between lines in the message window, in pixels.
+* @default 1
+* @desc Line-height multiplier for the message window. CSS line-height uses the same scale.
  *
  * @param SpecialCharacterRules
  * @text Special character rules
@@ -88,7 +88,7 @@
         latinNumber: Number(parameters.LatinNumberSpacing || 0),
         other: Number(parameters.LetterSpacing || 0)
     };
-    const messageLineSpacing = Number(parameters.MessageLineSpacing || 0);
+    const messageLineSpacing = Number(parameters.MessageLineSpacing || 1);
     const baseFontSize = () =>
         typeof $gameSystem?.mainFontSize === "function"
             ? $gameSystem.mainFontSize()
@@ -311,7 +311,7 @@
 
     const originalMessageCalcTextHeight = Window_Message.prototype.calcTextHeight;
     Window_Message.prototype.calcTextHeight = function(textState) {
-        return originalMessageCalcTextHeight.call(this, textState) + messageLineSpacing;
+        return originalMessageCalcTextHeight.call(this, textState) * messageLineSpacing;
     };
 
     const originalMessageWindowRect = Scene_Message.prototype.messageWindowRect;
@@ -320,7 +320,8 @@
         const defaultFourLineHeight = this.calcWindowHeight(4, false);
         const threeLineHeight = this.calcWindowHeight(3, false);
         rect.height -= defaultFourLineHeight - threeLineHeight;
-        rect.height += messageLineSpacing * 3;
+        rect.height += (defaultFourLineHeight - threeLineHeight) *
+            (messageLineSpacing - 1) * 3;
         return rect;
     };
 })();
