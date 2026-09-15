@@ -59,11 +59,12 @@ function setup(parameters = {}) {
         class Bitmap {
             constructor(width, height) {
                 this.width = width; this.height = height; this.text = [];
-                this.context = Object.fromEntries(['save', 'beginPath', 'moveTo', 'lineTo',
+                this.context = Object.fromEntries(['save', 'beginPath', 'moveTo', 'lineTo', 'arc',
                     'closePath', 'fill', 'stroke', 'restore'].map(key => [key, () => {}]));
             }
             clear() { this.text = []; }
             fillRect() {}
+            measureTextWidth(text) { return text.length * 10; }
             drawText(text) { this.text.push(text); }
             isReady() { return true; }
             destroy() { this.destroyed = true; }
@@ -424,7 +425,12 @@ test('UI handles hidden enemies, death, appearance, unknown cells and edge clamp
         configure('<WeaknessHidden:true><WeakElements:1,2,3,4,5,6,7,8,9>');
         const { source, panel } = createPanel();
         assert.equal(panel.bitmap.text.filter(text => text === '?').length, 9);
-        assert.ok(panel.bitmap.height > 82);
+        const wrappedHeight = panel.bitmap.height;
+        configure('<WeaknessHidden:true><WeakElements:1>');
+        panel.update();
+        assert.ok(wrappedHeight > panel.bitmap.height);
+        configure('<WeaknessHidden:true><WeakElements:1,2,3,4,5,6,7,8,9>');
+        panel.update();
         source.x = 0; source.y = 0;
         panel.update();
         assert.equal(panel.x, 4);

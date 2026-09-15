@@ -344,70 +344,104 @@
 
         redraw() {
             const enemy = this._enemy;
-            const cells = enemy._sbWeaknesses;
-            const columns = Math.max(1, Math.min(5, cells.length));
-            const width = Math.max(140, 20 + columns * 46);
-            const height = 48 + Math.max(1, Math.ceil(cells.length / 5)) * 34;
+            const broken = enemy.isShieldBroken();
+            const accent = broken ? "#ff7a55" : "#e9ca83";
+            const probe = this.bitmap || new Bitmap(1, 1);
+            probe.fontFace = "sans-serif";
+            probe.fontSize = 13;
+            const chips = [];
+            if (broken) chips.push({ label: "BREAK", style: "break" });
+            for (const weakness of enemy._sbWeaknesses) {
+                const known = !enemy._sbConfig.hidden || enemy._sbKnown.includes(weakness.key);
+                const weapon = weakness.kind === "weapon";
+                const name = (weapon ? $dataSystem.weaponTypes : $dataSystem.elements)[weakness.id] || "";
+                chips.push({
+                    label: known ? name.replace(/[（(].*$/, "").trim() || "?" : "?",
+                    style: known ? (weapon ? "weapon" : "element") : "unknown"
+                });
+            }
+            // Flow layout: pills wrap to the right of the shield, Octopath style.
+            const chipH = 26, gap = 4, flowX = 52, maxFlow = 220;
+            const rows = [[]];
+            let rowW = 0;
+            for (const chip of chips) {
+                chip.w = Math.max(chipH, Math.ceil(probe.measureTextWidth(chip.label)) + 16);
+                if (rowW > 0 && rowW + gap + chip.w > maxFlow) {
+                    rows.push([]);
+                    rowW = 0;
+                }
+                chip.x = flowX + (rowW > 0 ? rowW + gap : 0);
+                rowW = chip.x - flowX + chip.w;
+                chip.row = rows.length - 1;
+                rows[rows.length - 1].push(chip);
+            }
+            const flowW = Math.max(0, ...rows.map(row => row.length ? row[row.length - 1].x + row[row.length - 1].w - flowX : 0));
+            const flowH = rows[0].length ? rows.length * (chipH + gap) - gap : 0;
+            const width = flowW ? flowX + flowW + 2 : 46;
+            const height = Math.max(46, flowH + 2);
+            if (probe !== this.bitmap) probe.destroy();
             if (!this.bitmap || this.bitmap.width !== width || this.bitmap.height !== height) {
                 if (this.bitmap) this.bitmap.destroy();
                 this.bitmap = new Bitmap(width, height);
             }
             const bitmap = this.bitmap;
-            const broken = enemy.isShieldBroken();
-            const accent = broken ? "#ffad79" : "#e9ca83";
             bitmap.clear();
-            bitmap.fillRect(0, 0, width, height, "#111a2a");
-            bitmap.fillRect(0, 0, width, 2, accent);
-            bitmap.fillRect(0, height - 1, width, 1, "#657087");
-            bitmap.fillRect(0, 2, 1, height - 3, "#657087");
-            bitmap.fillRect(width - 1, 2, 1, height - 3, "#657087");
             // A compact UI font must not inherit MainFontLetterSpacing's
             // fixed negative spacing, which is tuned for larger window text.
             bitmap.fontFace = "sans-serif";
             bitmap.outlineWidth = 0;
+            const context = bitmap.context;
 
             // Original vector shield; no external artwork or icon dependency.
-            const context = bitmap.context;
+            const shieldY = Math.floor((height - 44) / 2);
             context.save();
             context.beginPath();
-            context.moveTo(10, 9);
-            context.lineTo(40, 9);
-            context.lineTo(38, 30);
-            context.lineTo(25, 39);
-            context.lineTo(12, 30);
+            context.moveTo(4, shieldY + 4);
+            context.lineTo(40, shieldY + 4);
+            context.lineTo(38, shieldY + 28);
+            context.lineTo(22, shieldY + 42);
+            context.lineTo(6, shieldY + 28);
             context.closePath();
-            context.fillStyle = broken ? "#703e30" : "#294461";
+            context.fillStyle = broken ? "rgba(96, 30, 24, 0.92)" : "rgba(20, 38, 66, 0.92)";
             context.fill();
             context.strokeStyle = accent;
-            context.lineWidth = 1.5;
+            context.lineWidth = 2;
             context.stroke();
             context.restore();
             bitmap.fontSize = 20;
+            bitmap.fontBold = true;
             bitmap.textColor = "#ffffff";
-            bitmap.drawText(String(enemy.shieldPoints()), 9, 7, 32, 30, "center");
-            bitmap.fontSize = 15;
-            bitmap.textColor = accent;
-            bitmap.drawText(broken ? "BREAK" : "SHIELD", 49, 6, width - 58, 20, "left");
-            bitmap.fontSize = 11;
-            bitmap.textColor = "#c8d5e6";
-            bitmap.drawText(broken ? `被ダメージ ×${enemy._sbConfig.rate}` :
-                `最大 ${enemy._sbConfig.max}`, 49, 25, width - 58, 17, "left");
-            if (!cells.length) {
-                bitmap.drawText("弱点なし", 10, 48, width - 20, 24, "center");
+            bitmap.drawText(String(enemy.shieldPoints()), 2, shieldY + 4, 40, 30, "center");
+            bitmap.fontBold = false;
+
+            const flowTop = Math.floor((height - flowH) / 2);
+            for (const chip of chips) {
+                const y = flowTop + chip.row * (chipH + gap);
+                const fill = { break: accent, element: "rgba(14, 22, 38, 0.88)",
+                    weapon: "rgba(14, 22, 38, 0.88)", unknown: "rgba(30, 34, 44, 0.8)" }[chip.style];
+                const ring = { break: accent, element: accent, weapon: "#9fd0ee", unknown: "#6b7486" }[chip.style];
+                context.save();
+                context.beginPath();
+                const r = chipH / 2;
+                context.moveTo(chip.x + r, y);
+                context.lineTo(chip.x + chip.w - r, y);
+                context.arc(chip.x + chip.w - r, y + r, r, -Math.PI / 2, Math.PI / 2);
+                context.lineTo(chip.x + r, y + chipH);
+                context.arc(chip.x + r, y + r, r, Math.PI / 2, Math.PI * 1.5);
+                context.closePath();
+                context.fillStyle = fill;
+                context.fill();
+                context.strokeStyle = ring;
+                context.lineWidth = 1.5;
+                context.stroke();
+                context.restore();
+                bitmap.fontSize = 13;
+                bitmap.fontBold = chip.style === "break";
+                bitmap.textColor = { break: "#2a1410", element: "#fff1ca",
+                    weapon: "#e6f4ff", unknown: "#98a3b8" }[chip.style];
+                bitmap.drawText(chip.label, chip.x, y, chip.w, chipH, "center");
             }
-            cells.forEach((weakness, index) => {
-                const rowCount = Math.min(5, cells.length - Math.floor(index / 5) * 5);
-                const x = (width - (rowCount * 46 - 6)) / 2 + (index % 5) * 46;
-                const y = 48 + Math.floor(index / 5) * 34;
-                const known = !enemy._sbConfig.hidden || enemy._sbKnown.includes(weakness.key);
-                const weapon = weakness.kind === "weapon";
-                const name = (weapon ? $dataSystem.weaponTypes : $dataSystem.elements)[weakness.id];
-                bitmap.fillRect(x, y, 40, 26, known ? "#2b3d53" : "#202a39");
-                bitmap.fillRect(x, y + 25, 40, 1, known ? (weapon ? "#b2d9ef" : accent) : "#566071");
-                bitmap.fontSize = known ? 16 : 18;
-                bitmap.textColor = known ? "#fff1ca" : "#8492a8";
-                bitmap.drawText(known ? name : "?", x + 2, y, 36, 25, "center");
-            });
+            bitmap.fontBold = false;
         }
 
         destroy(options) {

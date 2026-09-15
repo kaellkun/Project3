@@ -350,9 +350,24 @@
         // Keep status window statically aligned at the bottom
     };
 
+    // Extra breathing room for command text; window height isn't tied to instance itemHeight overrides.
+    const battleCommandExtraPadding = 12;
+
+    Window_PartyCommand.prototype.itemHeight = function() {
+        return Window_Selectable.prototype.itemHeight.call(this) + battleCommandExtraPadding;
+    };
+
+    Window_ActorCommand.prototype.itemHeight = function() {
+        return Window_Selectable.prototype.itemHeight.call(this) + battleCommandExtraPadding;
+    };
+
+    Scene_Battle.prototype.battleCommandHeight = function() {
+        return this.calcWindowHeight(1, true) + battleCommandExtraPadding;
+    };
+
     Scene_Battle.prototype.partyCommandWindowRect = function() {
         const ww = Graphics.boxWidth;
-        const wh = this.calcWindowHeight(1, true);
+        const wh = this.battleCommandHeight();
         const wx = 0;
         const wy = 0;
         return new Rectangle(wx, wy, ww, wh);
@@ -363,10 +378,10 @@
     };
 
     Scene_Battle.prototype.logWindowRect = function() {
-        const ww = Graphics.boxWidth - margin * 2;
+        const ww = Graphics.boxWidth;
         const wh = this.calcWindowHeight(10, false);
-        const wx = margin;
-        const wy = this.calcWindowHeight(1, true) + margin;
+        const wx = 0;
+        const wy = this.battleCommandHeight();
         return new Rectangle(wx, wy, ww, wh);
     };
 
@@ -375,9 +390,9 @@
         const boxW = Graphics.boxWidth;
         const boxH = Graphics.boxHeight;
         const statusH = portrait ? 160 : 140;
-        const wx = margin;
-        const wy = boxH - statusH - margin;
-        const ww = boxW - margin * 2;
+        const wx = 0;
+        const wy = boxH - statusH;
+        const ww = boxW;
         const wh = statusH;
         return new Rectangle(wx, wy, ww, wh);
     };
@@ -387,9 +402,9 @@
         const boxH = Graphics.boxHeight;
         const helpH = this.helpAreaHeight();
         const statusH = isPortraitLayout() ? 160 : 140;
-        const wx = margin;
-        const wy = boxH - statusH - helpH - margin * 2;
-        const ww = boxW - margin * 2;
+        const wx = 0;
+        const wy = boxH - statusH - helpH;
+        const ww = boxW;
         const wh = helpH;
         return new Rectangle(wx, wy, ww, wh);
     };
@@ -397,11 +412,11 @@
     Scene_Battle.prototype.skillWindowRect = function() {
         const boxW = Graphics.boxWidth;
         const boxH = Graphics.boxHeight;
-        const cmdH = this.calcWindowHeight(1, true);
+        const cmdH = this.battleCommandHeight();
         const statusH = isPortraitLayout() ? 160 : 140;
-        const topY = cmdH + margin;
-        const availableH = boxH - topY - statusH - this.helpAreaHeight() - margin * 3;
-        return new Rectangle(margin, topY, boxW - margin * 2, Math.max(1, availableH));
+        const topY = cmdH;
+        const availableH = boxH - topY - statusH - this.helpAreaHeight();
+        return new Rectangle(0, topY, boxW, Math.max(1, availableH));
     };
 
     Scene_Battle.prototype.itemWindowRect = function() {
@@ -425,7 +440,7 @@
     Scene_Battle.prototype.relayoutBattleWindows = function() {
         const boxW = Graphics.boxWidth;
         const boxH = Graphics.boxHeight;
-        const cmdH = this.calcWindowHeight(1, true);
+        const cmdH = this.battleCommandHeight();
         const statusH = isPortraitLayout() ? 160 : 140;
 
         // Screen Top-aligned Commands (y = 0)
@@ -433,14 +448,14 @@
         setWindowRect(this._actorCommandWindow, 0, 0, boxW, cmdH);
 
         // Battle log sits directly below the active command row.
-        setWindowRect(this._logWindow, margin, cmdH + margin, boxW - margin * 2, this.calcWindowHeight(10, false));
+        setWindowRect(this._logWindow, 0, cmdH, boxW, this.calcWindowHeight(10, false));
 
         // Screen Bottom-aligned Status (Fixed Operation Area at the Bottom)
-        setWindowRect(this._statusWindow, margin, boxH - statusH - margin, boxW - margin * 2, statusH);
+        setWindowRect(this._statusWindow, 0, boxH - statusH, boxW, statusH);
 
         // Help Window positioned just above status window if needed
         const helpH = this.helpAreaHeight();
-        setWindowRect(this._helpWindow, margin, boxH - statusH - helpH - margin * 2, boxW - margin * 2, helpH);
+        setWindowRect(this._helpWindow, 0, boxH - statusH - helpH, boxW, helpH);
     };
 
 })();
