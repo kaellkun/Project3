@@ -38,6 +38,7 @@
 
     const margin = 6;
     const compactFaceSize = 64;
+    const commandTextExtraPadding = 12;
 
     const compactSkillStatusHeight = scene => {
         return Math.max(compactFaceSize + margin * 2, scene.calcWindowHeight(2, false));
@@ -52,6 +53,11 @@
     //-----------------------------------------------------------------------------
     // Window Command Extensions (Horizontal Layout)
     //-----------------------------------------------------------------------------
+    const _Window_Command_itemHeight = Window_Command.prototype.itemHeight;
+    Window_Command.prototype.itemHeight = function() {
+        return _Window_Command_itemHeight.call(this) + commandTextExtraPadding;
+    };
+
     Window_MenuCommand.prototype.maxCols = function() {
         return Math.min(6, this._list ? Math.max(1, this._list.length) : 4);
     };
@@ -350,19 +356,8 @@
         // Keep status window statically aligned at the bottom
     };
 
-    // Extra breathing room for command text; window height isn't tied to instance itemHeight overrides.
-    const battleCommandExtraPadding = 12;
-
-    Window_PartyCommand.prototype.itemHeight = function() {
-        return Window_Selectable.prototype.itemHeight.call(this) + battleCommandExtraPadding;
-    };
-
-    Window_ActorCommand.prototype.itemHeight = function() {
-        return Window_Selectable.prototype.itemHeight.call(this) + battleCommandExtraPadding;
-    };
-
     Scene_Battle.prototype.battleCommandHeight = function() {
-        return this.calcWindowHeight(1, true) + battleCommandExtraPadding;
+        return this.calcWindowHeight(1, true);
     };
 
     Scene_Battle.prototype.partyCommandWindowRect = function() {

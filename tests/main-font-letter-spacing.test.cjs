@@ -139,6 +139,19 @@ test('opacity does not change configured letter spacing or alignment', () => {
     `);
 });
 
+test('command windows reserve vertical padding without changing ordinary list rows', () => {
+    setup()(`
+        for (const type of [Window_Command, Window_MenuCommand, Window_PartyCommand,
+            Window_ActorCommand, Window_ShopCommand, Window_TitleCommand]) {
+            const win = Object.create(type.prototype);
+            assert.equal(win.itemHeight(), 56);
+            win.itemRectWithPadding = () => ({ x: 0, y: 0, width: 240, height: 52 });
+            assert.deepEqual(win.itemLineRect(0), { x: 0, y: 8, width: 240, height: 36 });
+        }
+        assert.equal(Window_Selectable.prototype.itemHeight.call(Object.create(Window_Selectable.prototype)), 44);
+    `);
+});
+
 test('message text keeps letter spacing between incremental flushes', () => {
     setup()(`
         const message = Object.create(Window_Message.prototype);
