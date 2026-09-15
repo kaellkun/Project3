@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
-const extension = 'js/plugins/AchievementExternalData.js';
+const extension = 'js/plugins/Scene/addon/AchievementExternalData.js';
 const sample = read('data/Achievements.json');
 
 function setup({ category = true, mode = '', file = 'Achievements.json', base = true } = {}) {

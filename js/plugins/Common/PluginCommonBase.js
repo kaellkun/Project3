@@ -417,6 +417,13 @@
         }
 
         static findPluginName(currentScript) {
+            if (!currentScript || !currentScript.src) {
+                return '';
+            }
+            const match = currentScript.src.match(/^.*\/([^/?#]+)\.js(?:[?#].*)?$/);
+            if (match) {
+                return decodeURIComponent(match[1]);
+            }
             return currentScript.src.replace(/^.*\/(.*).js$/, function() {
                 return decodeURIComponent(arguments[1]);
             });

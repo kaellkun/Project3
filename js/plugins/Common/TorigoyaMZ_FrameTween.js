@@ -253,7 +253,7 @@
 
     function getPluginName() {
         const cs = document.currentScript;
-        return cs ? cs.src.split('/').pop().replace(/\.js$/, '') : 'TorigoyaMZ_FrameTween';
+        return cs ? decodeURIComponent(cs.src.split('/').pop().split(/[?#]/)[0].replace(/\.js$/, '')) : 'TorigoyaMZ_FrameTween';
     }
 
     function readParameter() {

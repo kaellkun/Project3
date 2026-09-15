@@ -46,8 +46,10 @@
 
 
 (() => {
-    //- プラグイン名
-    const pluginName = document.currentScript.src.match(/^.*\/(.*).js$/)[1];
+    //- プラグイン名 (Project3: cache-busted URLs)
+    const pluginName = document.currentScript
+        ? decodeURIComponent(document.currentScript.src.match(/^.*\/([^/?#]+)\.js(?:[?#].*)?$/)?.[1] || "Keke_PattoMute")
+        : "Keke_PattoMute";
 
 
 

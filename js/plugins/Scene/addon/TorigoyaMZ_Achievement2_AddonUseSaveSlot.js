@@ -38,7 +38,7 @@
 
     function getPluginName() {
         const cs = document.currentScript;
-        return cs ? cs.src.split('/').pop().replace(/\.js$/, '') : 'TorigoyaMZ_Achievement2_AddonUseSaveSlot';
+        return cs ? decodeURIComponent(cs.src.split('/').pop().split(/[?#]/)[0].replace(/\.js$/, '')) : 'TorigoyaMZ_Achievement2_AddonUseSaveSlot';
     }
 
     function readParameter() {
