@@ -55,7 +55,7 @@
         const rect = new Rectangle(48, 48, Graphics.boxWidth - 96, Graphics.boxHeight - 96);
         this._licenseWindow = new Window_LicenseNotice(rect);
         this.addWindow(this._licenseWindow);
-        fetch("README.md")
+        fetch(Utils.cacheBustedUrl("README.md"))
             .then(response => {
                 if (!response.ok) {
                     throw new Error("README.md could not be loaded");

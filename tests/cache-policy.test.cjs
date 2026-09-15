@@ -203,3 +203,39 @@ test('blocked service workers do not prevent clearing Cache Storage', async () =
 test('without Cache/SW APIs (such as mobile HTTP), fresh navigation still works', async () => {
     assert.equal((await resetPage({ unsupported: true })).navigations.length, 1);
 });
+
+test('index.html only requests the stylesheet through the versioned URL', () => {
+    const html = read('index.html');
+    assert.doesNotMatch(html, /<link[^>]*stylesheet/);
+    const created = [];
+    const context = vm.createContext({
+        Date, window: {},
+        document: {
+            head: { appendChild(el) { created.push(el); } },
+            body: { appendChild(el) { created.push(el); } },
+            createElement: tag => ({ tag })
+        }
+    });
+    vm.runInContext(html.match(/<script[^>]*>([\s\S]*?)<\/script>/)[1], context);
+    const token = context.window.__Project3CacheBuster;
+    assert.deepEqual(created.map(el => [el.tag, el.href || el.src]),
+        [['link', `css/game.css?v=${token}`], ['script', `js/main.js?v=${token}`]]);
+});
+
+test('plugins with private loaders (LN_FilmicFilter JSON, LicenseNotice README) use the boot token', () => {
+    const calls = [];
+    const filmic = read('js/plugins/HUG/LN_FilmicFilter.js');
+    const start = filmic.indexOf('static loadDataFile(e,t){');
+    const loader = filmic.slice(start, filmic.indexOf('static onXhrLoad', start));
+    const context = vm.createContext({
+        Utils: { cacheBustedUrl: url => `${url}?v=boot-1` },
+        DataManager: { onXhrError(...args) { calls.push(['error', ...args]); } },
+        XMLHttpRequest: class { open(...args) { calls.push(args); } overrideMimeType() {} send() {} }
+    });
+    vm.runInContext(`class FilterFileManager { ${loader} } FilterFileManager.loadDataFile("data/filters/index.json", () => {});`, context);
+    assert.deepEqual(calls, [['GET', 'data/filters/index.json?v=boot-1']]);
+
+    const license = read('js/plugins/LicenseNotice.js');
+    assert.match(license, /fetch\(Utils\.cacheBustedUrl\("README\.md"\)\)/);
+    assert.doesNotMatch(license, /fetch\("README\.md"\)/);
+});

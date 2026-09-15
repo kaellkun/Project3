@@ -38,7 +38,7 @@
 
     const margin = 6;
     const compactFaceSize = 64;
-    const commandTextExtraPadding = 12;
+    const commandTextExtraPadding = 20;
 
     const compactSkillStatusHeight = scene => {
         return Math.max(compactFaceSize + margin * 2, scene.calcWindowHeight(2, false));

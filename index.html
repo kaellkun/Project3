@@ -7,7 +7,6 @@
         <meta name="viewport" content="user-scalable=no">
         <link rel="icon" href="icon/icon.png" type="image/png">
         <link rel="apple-touch-icon" href="icon/icon.png">
-        <link rel="stylesheet" type="text/css" href="css/game.css">
         <title></title>
     </head>
     <body style="background-color: black">
@@ -15,10 +14,12 @@
             (() => {
                 const cacheBuster = String(Date.now());
                 window.__Project3CacheBuster = cacheBuster;
-                const stylesheet = document.querySelector("link[href='css/game.css']");
-                if (stylesheet) {
-                    stylesheet.href = `css/game.css?v=${cacheBuster}`;
-                }
+                // A static <link> would be fetched unversioned before this runs.
+                const stylesheet = document.createElement("link");
+                stylesheet.rel = "stylesheet";
+                stylesheet.type = "text/css";
+                stylesheet.href = `css/game.css?v=${cacheBuster}`;
+                document.head.appendChild(stylesheet);
                 const script = document.createElement("script");
                 script.type = "text/javascript";
                 script.src = `js/main.js?v=${cacheBuster}`;

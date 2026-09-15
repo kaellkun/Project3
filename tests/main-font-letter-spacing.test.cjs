@@ -144,9 +144,9 @@ test('command windows reserve vertical padding without changing ordinary list ro
         for (const type of [Window_Command, Window_MenuCommand, Window_PartyCommand,
             Window_ActorCommand, Window_ShopCommand, Window_TitleCommand]) {
             const win = Object.create(type.prototype);
-            assert.equal(win.itemHeight(), 56);
-            win.itemRectWithPadding = () => ({ x: 0, y: 0, width: 240, height: 52 });
-            assert.deepEqual(win.itemLineRect(0), { x: 0, y: 8, width: 240, height: 36 });
+            assert.equal(win.itemHeight(), 64);
+            win.itemRectWithPadding = () => ({ x: 0, y: 0, width: 240, height: 60 });
+            assert.deepEqual(win.itemLineRect(0), { x: 0, y: 12, width: 240, height: 36 });
         }
         assert.equal(Window_Selectable.prototype.itemHeight.call(Object.create(Window_Selectable.prototype)), 44);
     `);
