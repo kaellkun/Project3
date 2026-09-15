@@ -1,5 +1,12 @@
 # Project3
 
+## 素早さ比例ATB・行動順
+
+[LinearTimeBattle](js/plugins/LinearTimeBattle.js) を有効化しています。
+素早さ200対100なら「200側→200側→100側」の頻度で行動し、
+敵画像・味方の顔画像付きの行動順予測を戦闘画面に表示します。
+設定・例外・互換性は [ATBの説明](docs/linear-time-battle.md) を参照してください。
+
 ## ヘルプウィンドウ
 
 [HelpWindowThreeLines](js/plugins/HelpWindowThreeLines.js) を有効化しています。
