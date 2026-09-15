@@ -385,7 +385,7 @@
     Scene_Battle.prototype.helpWindowRect = function() {
         const boxW = Graphics.boxWidth;
         const boxH = Graphics.boxHeight;
-        const helpH = this.calcWindowHeight(2, false);
+        const helpH = this.helpAreaHeight();
         const statusH = isPortraitLayout() ? 160 : 140;
         const wx = margin;
         const wy = boxH - statusH - helpH - margin * 2;
@@ -400,8 +400,8 @@
         const cmdH = this.calcWindowHeight(1, true);
         const statusH = isPortraitLayout() ? 160 : 140;
         const topY = cmdH + margin;
-        const availableH = boxH - topY - statusH - margin * 2;
-        return new Rectangle(margin, topY, boxW - margin * 2, Math.max(100, availableH));
+        const availableH = boxH - topY - statusH - this.helpAreaHeight() - margin * 3;
+        return new Rectangle(margin, topY, boxW - margin * 2, Math.max(1, availableH));
     };
 
     Scene_Battle.prototype.itemWindowRect = function() {
@@ -439,7 +439,7 @@
         setWindowRect(this._statusWindow, margin, boxH - statusH - margin, boxW - margin * 2, statusH);
 
         // Help Window positioned just above status window if needed
-        const helpH = this.calcWindowHeight(2, false);
+        const helpH = this.helpAreaHeight();
         setWindowRect(this._helpWindow, margin, boxH - statusH - helpH - margin * 2, boxW - margin * 2, helpH);
     };
 
