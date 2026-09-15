@@ -424,7 +424,7 @@ Scene_LearnSkillSelectActorCustom.prototype.titleWindowRect = function() {
     const wx = 0;
     const wy = this.mainAreaTop();
     const ww = Graphics.boxWidth;
-    const wh = this.calcWindowHeight(1, false);
+    const wh = this.helpAreaHeight();
     return new Rectangle(wx, wy, ww, wh);
 };
 
