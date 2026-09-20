@@ -94,5 +94,6 @@ var $plugins =
 {"name":"ShieldBreakSystem","status":true,"description":"敵のシールドブレイクと、敵画像上部の弱点表示UI v1.0.0","parameters":{"DefaultShield":"3","DefaultWeakElements":"1","BreakTurns":"1","BreakDamageRate":"2","RevealWeaknesses":"true","UiOffsetY":"12"}},
 {"name":"BattleEquipCommand","status":true,"description":"戦闘中のアクターコマンドに「装備」を追加し、そのアクターの装備画面を開きます。(v1.0.0)","parameters":{}},
 {"name":"Menu/DestinationExternalData","status":true,"description":"固定IDの外部JSON行動目標とメニューのスクロール表示。(v1.0.0)","parameters":{"DataFile":"Destinations.json","FontSize":"24","VisibleLines":"2"}},
-{"name":"BattleCommandHierarchy","status":true,"description":"パーティーコマンドを使わない２階層のバトルコマンド。(v1.0.0)","parameters":{}}
+{"name":"BattleCommandHierarchy","status":true,"description":"パーティーコマンドを使わない２階層のバトルコマンド。(v1.0.0)","parameters":{}},
+{"name":"EtrianPartyFormation","status":true,"description":"前衛/後衛付き5人パーティー編成 (v1.0.0)","parameters":{"MaxBattleMembers":"5","FrontLabel":"前衛","BackLabel":"後衛","ReserveLabel":"控えメンバー","FrontTag":"前","BackTag":"後"}}
 ];
