@@ -303,7 +303,8 @@
                 const wx = 0;
                 const wy = this.mainAreaTop();
                 const ww = Graphics.boxWidth;
-                const wh = this.calcWindowHeight(length, true);
+                const wh = this.calcCommandWindowHeight
+                    ? this.calcCommandWindowHeight(length) : this.calcWindowHeight(length, true);
                 return new Rectangle(wx, wy, ww, wh);
             } else {
                 const ww = this.mainCommandWidth();

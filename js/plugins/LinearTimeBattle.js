@@ -211,7 +211,9 @@
     const barHeight = cell + pad * 2;
     const hasTopUi = () => PluginManager._scripts.includes("FlexibleTopDownUI");
     const timelineEnabled = () => enabled() && showTimeline;
-    const top = scene => hasTopUi() ? scene.calcWindowHeight(1, true) + gap : gap;
+    const top = scene => hasTopUi()
+        ? (scene.battleCommandHeight ? scene.battleCommandHeight() : scene.calcWindowHeight(1, true)) + gap
+        : gap;
     // Reserve space for lists as well as the battle log, rather than covering
     // selectable rows. Existing bottom help/status locations remain unchanged.
     for (const method of ["logWindowRect", "skillWindowRect", "itemWindowRect", "enemyWindowRect"]) {

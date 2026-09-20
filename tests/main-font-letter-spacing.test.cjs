@@ -17,6 +17,7 @@ function setup(parameterOverrides = {}) {
     run(core.slice(core.indexOf('function Bitmap('), core.indexOf('function Sprite(')));
     run(`
         function Window() {}
+        function Stage() {}
         function Scene_MenuBase() {}
         function Scene_Menu() {}
         function Scene_Item() {}
@@ -33,6 +34,10 @@ function setup(parameterOverrides = {}) {
         };
     `);
     run(read('js/rmmz_windows.js'));
+    run(read('js/rmmz_scenes.js'));
+    run(`Scene_Message.prototype.messageWindowRect = function() {
+        return { height: this.calcWindowHeight(4, false) + 8 };
+    };`);
     run(read('js/plugins.js'));
     run(`
         const PluginManager = {
@@ -41,7 +46,7 @@ function setup(parameterOverrides = {}) {
                 ...${JSON.stringify(testParameters)}
             })
         };
-        const $gameSystem = { mainFontSize: () => 28 };
+        const $gameSystem = { mainFontSize: () => 28, windowPadding: () => 12 };
     `);
     run(read('js/plugins/MainFontLetterSpacing.js'));
     run(read('js/plugins/FlexibleTopDownUI.js'));
@@ -147,8 +152,28 @@ test('command windows reserve vertical padding without changing ordinary list ro
             assert.equal(win.itemHeight(), 64);
             win.itemRectWithPadding = () => ({ x: 0, y: 0, width: 240, height: 60 });
             assert.deepEqual(win.itemLineRect(0), { x: 0, y: 12, width: 240, height: 36 });
+            assert.equal(Window_Selectable.prototype.fittingHeight.call(win, 1), 88);
         }
-        assert.equal(Window_Selectable.prototype.itemHeight.call(Object.create(Window_Selectable.prototype)), 44);
+        const ordinary = Object.create(Window_Selectable.prototype);
+        assert.equal(ordinary.itemHeight(), 44);
+        assert.equal(Window_Selectable.prototype.fittingHeight.call(ordinary, 1), 68);
+    `);
+});
+
+test('long command labels fit the padded width and restore font size and opacity', () => {
+    setup()(`
+        const win = commandWindow();
+        bitmap.paintOpacity = 160;
+        const original = bitmap.drawText;
+        bitmap.drawText = function(text, x, y, width, height, align) {
+            assert.ok(this.measureTextWidth(text) <= width);
+            assert.equal(this.fontSize, 14);
+            return original.call(this, text, x, y, width, height, align);
+        };
+        win.drawText('攻撃', 0, 0, 24, 'center');
+        assert.equal(bitmap.fontSize, 28);
+        assert.equal(bitmap.paintOpacity, 160);
+        assert.ok(draws.every(draw => draw.alpha === 160 / 255));
     `);
 });
 

@@ -74,6 +74,18 @@ Audio, images, fonts, movies, and other assets in this project may have
 separate copyright and license terms. Use, modification, and redistribution of
 those assets require confirmation of the applicable rights and licenses.
 
+### Enemy Material
+
+This project uses enemy material assets from the following site:
+
+- Author: 氏家まさら
+- Site name: 素材屋『氏』
+- URL: https://uzi-material.com/
+- Source: https://uzi-material.com/service/
+
+The enemy materials are incorporated into this game as part of the project
+assets and are used in accordance with the rights and terms of the source site.
+
 ### Senobi Gothic
 
 The Senobi Gothic font files in `fonts/` are distributed by MODI (MODI工房),

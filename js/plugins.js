@@ -31,5 +31,6 @@ var $plugins =
 {"name":"BGM/Keke_PattoMute","status":true,"description":"ゲームの音を1ボタンでミュートする","parameters":{"起動時にミュート":"true"}},
 {"name":"HelpWindowThreeLines","status":true,"description":"ヘルプを3行に統一し、ヘルプ内だけ文字サイズを相対調整します。(v1.0.0)","parameters":{"FontSizeRate":"85"}},
 {"name":"LinearTimeBattle","status":true,"description":"素早さ比例のATBと、敵味方の画像付き行動順予測。(v1.0.0)","parameters":{"ReferenceAgility":"100","ChargeFrames":"120","PauseDuringInput":"true","ShowTimeline":"true","PreviewCount":"8"}},
-{"name":"ShieldBreakSystem","status":true,"description":"敵のシールドブレイクと、敵画像上部の弱点表示UI v1.0.0","parameters":{"DefaultShield":"3","DefaultWeakElements":"1","BreakTurns":"1","BreakDamageRate":"2","RevealWeaknesses":"true","UiOffsetY":"12"}}
+{"name":"ShieldBreakSystem","status":true,"description":"敵のシールドブレイクと、敵画像上部の弱点表示UI v1.0.0","parameters":{"DefaultShield":"3","DefaultWeakElements":"1","BreakTurns":"1","BreakDamageRate":"2","RevealWeaknesses":"true","UiOffsetY":"12"}},
+{"name":"BattleEquipCommand","status":true,"description":"戦闘中のアクターコマンドに「装備」を追加し、そのアクターの装備画面を開きます。(v1.0.0)","parameters":{}}
 ];
