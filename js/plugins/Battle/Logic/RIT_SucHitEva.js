@@ -61,7 +61,7 @@
        add = Number(this.item().meta.additionalSuccessRate);
      }
      if (this.isPhysical()) {
-       result += 1 - successRate * 0.01 - add * 0.01 - this.subject().hit;
+       result += 2 - successRate * 0.01 - add * 0.01 - this.subject().hit;
      } else if (this.isMagical()) {
        result += 1 - successRate * 0.01 - add * 0.01;
      }
