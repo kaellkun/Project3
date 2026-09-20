@@ -81,6 +81,7 @@
 
     const pluginName = "MainFontLetterSpacing";
     const parameters = PluginManager.parameters(pluginName);
+    const shadowAll = PluginManager.parameters("NRP_MessageShadow").All;
     const spacing = {
         hiragana: Number(parameters.HiraganaSpacing || 0),
         katakana: Number(parameters.KatakanaSpacing || 0),
@@ -231,8 +232,8 @@
             const trim = characterTrim(bitmap, character);
             drawX += trim.leftPadding;
             const glyphX = drawX - trim.left;
-            context.strokeText(character, glyphX, y);
-            context.fillText(character, glyphX, y);
+            bitmap._drawTextOutline(character, glyphX, y, 0xffffffff);
+            bitmap._drawTextBody(character, glyphX, y, 0xffffffff);
             drawX += context.measureText(character).width - trim.left - trim.right;
             drawX += trim.rightPadding;
             if (index < characters.length - 1) {
@@ -271,6 +272,12 @@
             return;
         }
 
+        // Main-font rendering bypasses NRP's drawText wrapper when loaded after it.
+        if ((shadowAll === "true" || shadowAll === true) &&
+            typeof this.setMessageShadow === "function") {
+            this.setMessageShadow(true);
+        }
+
         const context = this.context;
         maxWidth = maxWidth || 0xffffffff;
         let tx = x;
@@ -285,7 +292,7 @@
         context.textAlign = "left";
         context.textBaseline = "alphabetic";
         // Keep the alpha set by Bitmap.paintOpacity (e.g. disabled commands).
-        // Both glyph fill and outline must dim; save/restore preserves the state.
+        // Glyph fill, outline and shadow must dim; save/restore preserves the state.
         context.strokeStyle = this.outlineColor;
         context.lineWidth = this.outlineWidth;
         context.lineJoin = "round";
