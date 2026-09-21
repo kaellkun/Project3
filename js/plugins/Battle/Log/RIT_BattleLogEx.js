@@ -428,6 +428,9 @@
         const states = result.addedStateObjects();
         for (const state of states) {
             const stateText = target.isActor() ? state.message1 : state.message2;
+            if (state.id === target.deathStateId()) {
+                this.push("performCollapse", target);
+            }
             if (stateText) {
                 const symbol = param_UseHierarchy ? param_HierarchyBranch : '';
                 this.push("addText", symbol + stateText.format(target.name()));

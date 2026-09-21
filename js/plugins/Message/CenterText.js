@@ -10,7 +10,7 @@
  * @value center
  * @option 左
  * @value left
- * @default center
+ * @default left
  *
  * @help
  * メッセージウィンドウの各行を本文領域の中央に配置します。

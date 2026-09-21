@@ -164,6 +164,55 @@
         return metaValue ? metaValue : _Game_Action_numTargets.apply(this, arguments);
     };
 
+    Game_Action.prototype.isScopeExtendRandomNum = function() {
+        return !!PluginManagerEx.findMetaValue(this.item(), ['SERandomNum', 'SEランダム回数']);
+    };
+
+    Game_Action.prototype.isScopeExtendRandomRetarget = function(target) {
+        return this.isScopeExtendRandomNum() && target && !this.testLifeAndDeath(target);
+    };
+
+    Game_Action.prototype.findScopeExtendRandomTarget = function() {
+        if (this.isScopeExtendInfo(['SE敵味方', 'SEEnemiesAndAllies']) && this.isForRandom()) {
+            return this.findScopeExtendRandomTargetForAll();
+        }
+        if (this.isForOpponent()) {
+            return this.opponentsUnit().randomTarget();
+        } else if (this.isForAliveFriend()) {
+            return this.friendsUnit().randomFriendTarget();
+        } else {
+            return null;
+        }
+    };
+
+    Game_Action.prototype.findScopeExtendRandomTargetForAll = function() {
+        const opponentsUnit = this.opponentsUnit();
+        const friendsUnit = this.friendsUnit();
+        const opponentsLength = opponentsUnit.aliveMembers().length;
+        const friendLength = friendsUnit.aliveMembers().length;
+        if (opponentsLength + friendLength <= 0) {
+            return null;
+        }
+        if (Math.randomInt(opponentsLength + friendLength) >= opponentsLength) {
+            return friendsUnit.randomTarget();
+        } else {
+            return opponentsUnit.randomTarget();
+        }
+    };
+
+    const _BattleManager_updateAction = BattleManager.updateAction;
+    BattleManager.updateAction = function() {
+        const action = this._action;
+        const target = this._targets?.[0];
+        if (action?.isScopeExtendRandomRetarget?.(target)) {
+            const newTarget = action.findScopeExtendRandomTarget();
+            if (newTarget) {
+                this._targets[0] = newTarget;
+            }
+        }
+        _BattleManager_updateAction.apply(this, arguments);
+    };
+
     const _Game_Action_targetsForOpponents = Game_Action.prototype.targetsForOpponents;
     Game_Action.prototype.targetsForOpponents = function() {
         let targets = _Game_Action_targetsForOpponents.apply(this, arguments);

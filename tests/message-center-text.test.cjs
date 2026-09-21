@@ -13,7 +13,7 @@ const plugin = fs.readFileSync(
 function createWindow({ faceName = '' } = {}) {
     const context = vm.createContext({});
     vm.runInContext(`
-        const PluginManager = { parameters: () => ({ DefaultAlignment: 'center' }) };
+        const PluginManager = { parameters: () => ({ DefaultAlignment: 'left' }) };
         const Window_Base = function() {};
         Window_Base.prototype.processEscapeCharacter = function() {};
         Window_Base.prototype.textSizeEx = function() { return { width: 100 }; };
@@ -50,6 +50,7 @@ test('centers a line in the message text area', () => {
         startX: 4,
         x: 4
     };
+    window._centerTextAlignment = 'center';
 
     window.updateCenterTextLinePosition(textState);
 
@@ -67,6 +68,7 @@ test('reserves the face area when centering', () => {
         startX: 164,
         x: 164
     };
+    window._centerTextAlignment = 'center';
 
     window.updateCenterTextLinePosition(textState);
 

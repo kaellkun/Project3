@@ -322,7 +322,7 @@ test('root has exactly five labels in order, with real optional integrations', (
     setup().run(`
         const scene = battleScene(), win = scene._actorCommandWindow;
         assert.deepEqual(commandShape(win), [
-            ['戦う', 'fightMenu', null], ['オート', 'autoBattle', null], ['準備', 'prepareMenu', null],
+            ['戦う', 'fightMenu', null], ['オート', 'autoBattle', null], ['戦況確認', 'situationMenu', null],
             ['入れ替え', 'swap', null], ['逃げる', 'escape', null]
         ]);
         assert.ok(win._list.every(c => c.enabled));
@@ -399,20 +399,24 @@ for (const sealDisable of [false, true]) {
     });
 }
 
-test('prepare labels/order and all action handlers are installed', () => {
+test('situation and formation labels/order and all action handlers are installed', () => {
     setup().run(`
         const scene = battleScene(), win = scene._actorCommandWindow;
-        choose(win, 'prepareMenu');
+        choose(win, 'situationMenu');
         assert.deepEqual(commandShape(win), [
-            ['装備変更', 'equip', null], ['味方ステータス', 'allyStatus', null],
-            ['敵ステータス', 'enemyStatus', null], ['バトルログ', 'pastLog', null],
+            ['味方ステータス', 'allyStatus', null], ['敵ステータス', 'enemyStatus', null],
+            ['バトルログ', 'pastLog', null],
             ['戻る', 'commandBack', null]
         ]);
         for (const c of win._list) {
             assert.equal(c.enabled, true);
             assert.equal(win.isHandled(c.symbol), true, c.symbol);
         }
-        for (const symbol of ['fightMenu', 'prepareMenu', 'swap', 'escape', 'autoBattle', 'cancel']) {
+        win.setBattleCommandLayer('formation');
+        assert.deepEqual(commandShape(win), [
+            ['隊列変更', 'formation', null], ['装備変更', 'equip', null], ['戻る', 'commandBack', null]
+        ]);
+        for (const symbol of ['fightMenu', 'situationMenu', 'formationMenu', 'swap', 'escape', 'autoBattle', 'cancel']) {
             assert.equal(win.isHandled(symbol), true, symbol);
         }
     `);
@@ -424,12 +428,12 @@ test('missing optional plugins disable auto/equip/info/log without crashing', ()
         assert.equal(entry(win, 'autoBattle').enabled, false);
         choose(win, 'autoBattle');
         assert.equal(calls.buzzer, 1);
-        choose(win, 'prepareMenu');
-        assert.deepEqual(win._list.map(c => c.enabled), [false, false, false, false, true]);
+        choose(win, 'situationMenu');
+        assert.deepEqual(win._list.map(c => c.enabled), [false, false, false, true]);
     `);
 });
 
-for (const layer of ['fight', 'prepare']) {
+for (const layer of ['fight', 'situation']) {
     for (const back of ['cancel', 'commandBack']) {
         test(`${layer} ${back} returns to matching root entry, never previous actor/party`, () => {
             setup().run(`
@@ -437,9 +441,9 @@ for (const layer of ['fight', 'prepare']) {
                 const actor = BattleManager.actor(), action = actor.inputtingAction();
                 const phase = BattleManager._phase, gauge = actor._tpbChargeTime;
                 BattleManager.selectPreviousCommand = () => assert.fail('must not undo actor input');
-                choose(win, '${layer === 'fight' ? 'fightMenu' : 'prepareMenu'}');
+                choose(win, '${layer === 'fight' ? 'fightMenu' : 'situationMenu'}');
                 ${back === 'cancel' ? 'cancel(win);' : "choose(win, 'commandBack');"}
-                assertLayer(scene, 'root', '${layer === 'fight' ? 'fightMenu' : 'prepareMenu'}');
+                assertLayer(scene, 'root', '${layer === 'fight' ? 'fightMenu' : 'situationMenu'}');
                 assert.equal(BattleManager.actor(), actor);
                 assert.equal(actor.inputtingAction(), action);
                 assert.equal(actor._tpbChargeTime, gauge);
@@ -633,12 +637,12 @@ test('turn-based auto party gate still assigns actions and starts turn', () => {
     `);
 });
 
-test('real BattleEquipCommand roundtrip to fresh Scene_Battle restores prepare/equip without consuming action', () => {
+test('real BattleEquipCommand roundtrip to fresh Scene_Battle restores formation/equip without consuming action', () => {
     setup().run(`
         const scene = battleScene(), actor = BattleManager.actor();
         const action = actor.inputtingAction(), before = resources(actor);
         actor._tpbChargeTime = 0.75;
-        choose(scene._actorCommandWindow, 'prepareMenu');
+        scene._actorCommandWindow.setBattleCommandLayer('formation');
         choose(scene._actorCommandWindow, 'equip');
         assert.deepEqual(calls.pushed, [Scene_Equip]);
         assert.equal($gameParty.menuActor(), actor);
@@ -653,7 +657,7 @@ test('real BattleEquipCommand roundtrip to fresh Scene_Battle restores prepare/e
         BattleManager.startBattle = () => assert.fail('must not restart battle');
         BattleManager.playBattleBgm = () => assert.fail('must not restart BGM');
         resumed.start();
-        assertLayer(resumed, 'prepare', 'equip');
+        assertLayer(resumed, 'formation', 'equip');
         assert.equal(BattleManager._hierarchyEquipActor, null);
         assert.equal(BattleManager.actor(), actor);
         assert.equal(actor.inputtingAction(), action);
@@ -678,11 +682,11 @@ test('equip marker cannot leak to a different actor or another battle', () => {
 });
 
 for (const side of ['ally', 'enemy']) {
-    test(`${side} status filters members/details, pauses time, returns to prepare selection`, () => {
+    test(`${side} status filters members/details, pauses time, returns to situation selection`, () => {
         setup().run(`
             const scene = battleScene(), actor = BattleManager.actor();
             const action = actor.inputtingAction(), before = resources(actor);
-            choose(scene._actorCommandWindow, 'prepareMenu');
+            choose(scene._actorCommandWindow, 'situationMenu');
             choose(scene._actorCommandWindow, '${side}Status');
             const info = scene._windowBattleStateInfo;
             const expected = ${side === 'ally' ? '$gameParty.battleMembers()' : '$gameTroop.members().filter(b => b.isAppeared())'};
@@ -697,7 +701,7 @@ for (const side of ['ally', 'enemy']) {
             cancel(info);
             assert.equal(info.active, false);
             assert.equal(info._hierarchySide, null);
-            assertLayer(scene, 'prepare', '${side}Status');
+            assertLayer(scene, 'situation', '${side}Status');
             assert.equal(scene.isTimeActive(), true);
             assert.equal(actor.inputtingAction(), action);
             assert.deepEqual(resources(actor), before);
@@ -709,7 +713,7 @@ for (const side of ['ally', 'enemy']) {
 test('status reopening switches sides and shortcut returns to its original fight layer', () => {
     setup().run(`
         const scene = battleScene(), win = scene._actorCommandWindow;
-        choose(win, 'prepareMenu');
+        choose(win, 'situationMenu');
         choose(win, 'enemyStatus');
         scene._windowBattleStateInfo.select(99);
         scene._windowBattleStateInfo.refresh();
@@ -736,7 +740,7 @@ test('no alive enemies disables enemy status, while ally status remains availabl
     setup().run(`
         for (const enemy of $gameTroop.members()) enemy.setHp(0);
         const scene = battleScene(), win = scene._actorCommandWindow;
-        choose(win, 'prepareMenu');
+        choose(win, 'situationMenu');
         assert.equal(entry(win, 'enemyStatus').enabled, false);
         assert.equal(entry(win, 'allyStatus').enabled, true);
         choose(win, 'enemyStatus');
@@ -745,18 +749,18 @@ test('no alive enemies disables enemy status, while ally status remains availabl
     `);
 });
 
-test('past log deactivates actor input, pauses time and returns to prepare/pastLog', () => {
+test('past log deactivates actor input, pauses time and returns to situation/pastLog', () => {
     setup().run(`
         const scene = battleScene(), actor = BattleManager.actor();
         const action = actor.inputtingAction();
-        choose(scene._actorCommandWindow, 'prepareMenu');
+        choose(scene._actorCommandWindow, 'situationMenu');
         choose(scene._actorCommandWindow, 'pastLog');
         assert.equal(scene._pastLogWindow.active, true);
         assert.equal(scene._actorCommandWindow.active, false);
         assert.equal(scene.isTimeActive(), false);
         cancel(scene._pastLogWindow);
         assert.equal(scene._pastLogWindow.active, false);
-        assertLayer(scene, 'prepare', 'pastLog');
+        assertLayer(scene, 'situation', 'pastLog');
         assert.equal(scene.isTimeActive(), true);
         assert.equal(actor.inputtingAction(), action);
         assert.equal(actor._tpbChargeTime, 1);
@@ -953,10 +957,13 @@ for (const [width, height, cols, rows] of [[360, 800, 3, 2], [639, 900, 3, 2],
             assert.equal(win.y, 0);
             assert.equal(win.width, Graphics.boxWidth);
             assert.equal(win.height, scene.battleCommandHeight());
-            for (const layer of ['root', 'fight', 'prepare']) {
+            for (const layer of ['root', 'fight', 'situation', 'formation']) {
                 win.setBattleCommandLayer(layer);
+                const layerRows = layer === 'formation'
+                    ? Math.ceil(win.maxItems() / Math.min(${cols}, win.maxItems()))
+                    : ${rows};
                 assert.equal(win.maxCols(), Math.min(${cols}, win.maxItems()));
-                assert.equal(win.maxRows(), ${rows});
+                assert.equal(win.maxRows(), layerRows);
                 assert.equal(win.maxPageRows(), ${rows});
                 assert.equal(win.scrollY(), 0);
                 for (let index = 0; index < win.maxItems(); index++) {

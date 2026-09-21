@@ -16,12 +16,13 @@
  * 関連する戦闘/UIプラグインより下に配置してください。
  * 戦う → 弱攻撃(タイプ1)、強攻撃(2)、アイテム、補助･回復(3)、妨害(4)
  * オート → NRP_AutoBattleの全員自動戦闘。キャンセルで解除。
- * 準備 → 装備変更、味方ステータス、敵ステータス、バトルログ
+ * 戦況確認 → 味方ステータス、敵ステータス、バトルログ
+ * 編成変更 → 隊列変更、装備変更
  * 入れ替え → 入力中のアクターと控えを交代（その行動機会を消費）。
  * 逃げる → 通常の逃走判定。逃走禁止戦闘では選択不可。
  *
  * スキルタイプ未所持・封印中の項目は無効表示します。
- * 装備・情報・ログからは準備に戻り、行動ゲージを消費しません。
+ * 装備・情報・ログからは各サブメニューに戻り、行動ゲージを消費しません。
  * 入れ替えは並び替え許可時のみ。戦闘不能・行動不能・自動戦闘の控えは
  * 選択できません。HP/MP/TP・ステートは保持し、交代した２人のゲージと
  * 未実行行動をリセットします。控えがいなければ選択不可です。
@@ -60,18 +61,22 @@
                 this.addCommand("戻る", "commandBack");
                 break;
             }
-            case "prepare":
-                this.addCommand("装備変更", "equip", !!Scene_Battle.prototype.commandEquip);
+            case "situation":
                 this.addCommand("味方ステータス", "allyStatus", !!Scene_Battle.prototype.actorCommandStateInfo);
                 this.addCommand("敵ステータス", "enemyStatus",
                     !!Scene_Battle.prototype.actorCommandStateInfo && $gameTroop.aliveMembers().length > 0);
                 this.addCommand("バトルログ", "pastLog", !!Scene_Battle.prototype.commandPastLog);
                 this.addCommand("戻る", "commandBack");
                 break;
+            case "formation":
+                this.addCommand("隊列変更", "formation", !!Scene_Battle.prototype.commandBattleFormation);
+                this.addCommand("装備変更", "equip", !!Scene_Battle.prototype.commandEquip);
+                this.addCommand("戻る", "commandBack");
+                break;
             default:
                 this.addCommand("戦う", "fightMenu");
                 this.addCommand("オート", "autoBattle", !!BattleManager.setAutoBattleMode);
-                this.addCommand("準備", "prepareMenu");
+                this.addCommand("戦況確認", "situationMenu");
                 this.addCommand("入れ替え", "swap", canSwap());
                 this.addCommand("逃げる", "escape", BattleManager.canEscape());
                 break;
@@ -119,7 +124,8 @@
         createCommands.call(this);
         const win = this._actorCommandWindow;
         win.setHandler("fightMenu", () => win.setBattleCommandLayer("fight"));
-        win.setHandler("prepareMenu", () => win.setBattleCommandLayer("prepare"));
+        win.setHandler("situationMenu", () => win.setBattleCommandLayer("situation"));
+        win.setHandler("formationMenu", () => win.setBattleCommandLayer("formation"));
         win.setHandler("commandBack", this.commandHierarchyBack.bind(this));
         win.setHandler("cancel", this.commandHierarchyBack.bind(this));
         win.setHandler("escape", this.commandEscape.bind(this));
@@ -135,8 +141,24 @@
 
     Scene_Battle.prototype.commandHierarchyBack = function() {
         const win = this._actorCommandWindow;
-        const symbol = win._battleCommandLayer === "prepare" ? "prepareMenu" : "fightMenu";
+        const symbol = {
+            fight: "fightMenu",
+            situation: "situationMenu",
+            formation: "formationMenu"
+        }[win._battleCommandLayer] || "fightMenu";
         win.setBattleCommandLayer("root", symbol);
+    };
+
+    const startAction = BattleManager.startAction;
+    BattleManager.startAction = function() {
+        const subject = this._subject;
+        startAction.apply(this, arguments);
+        if (subject && this._logWindow) {
+            this._logWindow._methods.unshift({
+                name: "addText",
+                params: [`${subject.name()}のターン！`]
+            });
+        }
     };
 
     // Skip both the initial TPB party gate and the turn-based party selection.
@@ -175,6 +197,7 @@
     if (commandEquip) {
         Scene_Battle.prototype.commandEquip = function() {
             BattleManager._hierarchyEquipActor = BattleManager.actor();
+            BattleManager._hierarchyEquipLayer = this._actorCommandWindow._battleCommandLayer;
             commandEquip.call(this);
         };
     }
@@ -182,6 +205,7 @@
     BattleManager.initMembers = function() {
         initBattle.call(this);
         this._hierarchyEquipActor = null;
+        this._hierarchyEquipLayer = null;
     };
     const startActor = Scene_Battle.prototype.startActorCommandSelection;
     Scene_Battle.prototype.startActorCommandSelection = function() {
@@ -190,9 +214,10 @@
         this._partyCommandWindow.deactivate();
         if (BattleManager._hierarchyEquipActor) {
             if (BattleManager._hierarchyEquipActor === BattleManager.actor()) {
-                this._actorCommandWindow.setBattleCommandLayer("prepare", "equip");
+                this._actorCommandWindow.setBattleCommandLayer(BattleManager._hierarchyEquipLayer || "formation", "equip");
             }
             BattleManager._hierarchyEquipActor = null;
+            BattleManager._hierarchyEquipLayer = null;
         }
     };
 
@@ -205,7 +230,7 @@
         Scene_Battle.prototype.onPastLogCancel = function() {
             this._pastLogWindow.close();
             this._pastLogWindow.deactivate();
-            this._actorCommandWindow.setBattleCommandLayer("prepare", "pastLog");
+            this._actorCommandWindow.setBattleCommandLayer("situation", "pastLog");
         };
     }
 

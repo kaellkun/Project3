@@ -607,8 +607,27 @@
         const cellWidth = Math.floor(this.innerWidth / this.maxCols()) - this.colSpacing() - this.itemPadding() * 2;
         const textWidth = cellWidth - Math.min(ImageManager.faceHeight, candidate - 8) - menuFaceGap;
         const gaugeRows = textWidth >= gaugeStep * gaugeCount - 8 ? 1 : gaugeCount;
-        const minHeight = this.lineHeight() + this.gaugeLineHeight() * gaugeRows + 8;
+        // Name/tag row + attack/magic/agility row + gauge rows.
+        const minHeight = this.lineHeight() * 2 + this.gaugeLineHeight() * gaugeRows + 8;
         return Math.max(minHeight, candidate);
+    };
+
+    // Attack/Magic Attack/Agility, requested for the menu party list.
+    Window_MenuStatus.prototype.menuStatsLineParams = function() {
+        return [{ id: 2, label: "攻" }, { id: 4, label: "魔" }, { id: 6, label: "敏" }];
+    };
+
+    Window_MenuStatus.prototype.drawActorStatsLine = function(actor, x, y, width) {
+        const stats = this.menuStatsLineParams();
+        const colWidth = Math.floor(width / stats.length);
+        const labelWidth = this.textWidth("攻") + 4;
+        for (let i = 0; i < stats.length; i++) {
+            const cx = x + colWidth * i;
+            this.changeTextColor(ColorManager.systemColor());
+            this.drawText(stats[i].label, cx, y, labelWidth);
+            this.resetTextColor();
+            this.drawText(actor.param(stats[i].id), cx + labelWidth, y, colWidth - labelWidth - 4, "right");
+        }
     };
 
     Window_MenuStatus.prototype.menuFaceSize = function(rect) {
@@ -639,8 +658,8 @@
         const types = $dataSystem.optDisplayTp ? ["hp", "mp", "tp"] : ["hp", "mp"];
         const sideBySide = width >= gaugeStep * types.length - 8;
         const gaugeRows = sideBySide ? 1 : types.length;
-        const threeLines = rect.height >= lineH * 2 + gaugeH * gaugeRows + 8;
-        const blockH = (threeLines ? lineH * 2 : lineH) + gaugeH * gaugeRows;
+        const threeLines = rect.height >= lineH * 3 + gaugeH * gaugeRows + 8;
+        const blockH = (threeLines ? lineH * 2 : lineH) + lineH + gaugeH * gaugeRows;
         let y = rect.y + Math.floor((rect.height - blockH) / 2);
         const tagWidth = 56;
         const lvWidth = 72;
@@ -654,6 +673,8 @@
             this.drawActorClass(actor, x, y, width);
             y += lineH;
         }
+        this.drawActorStatsLine(actor, x, y, width);
+        y += lineH;
         let gx = x;
         for (const type of types) {
             this.placeGauge(actor, type, gx, y);
@@ -952,7 +973,7 @@
     };
 
     //-------------------------------------------------------------------
-    // In-battle formation: "隊列" actor command, consumes the actor's turn
+    // In-battle formation is opened from BattleCommandHierarchy's 編成変更 menu.
     //-------------------------------------------------------------------
     const _Window_ActorCommand_makeCommandList = Window_ActorCommand.prototype.makeCommandList;
     Window_ActorCommand.prototype.makeCommandList = function() {
@@ -964,11 +985,11 @@
         // BattleCommandHierarchy's reserve swap is superseded by full formation.
         const swap = this._list.find(c => c.symbol === "swap");
         if (swap) {
-            swap.name = "隊列";
-            swap.symbol = "formation";
+            swap.name = "編成変更";
+            swap.symbol = "formationMenu";
             swap.enabled = enabled;
         } else {
-            this.addCommand("隊列", "formation", enabled);
+            this.addCommand("編成変更", "formationMenu", enabled);
         }
     };
 
