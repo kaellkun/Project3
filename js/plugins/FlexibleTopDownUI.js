@@ -108,16 +108,12 @@
         return Math.min(widest + this.itemPadding(), Math.floor(this.itemWidth() * 0.4));
     };
 
-    const _Window_EquipSlot_drawItem = Window_EquipSlot.prototype.drawItem;
-    Window_EquipSlot.prototype.drawItem = function(index) {
-        _Window_EquipSlot_drawItem.call(this, index);
+    const _Window_EquipItem_drawItem = Window_EquipItem.prototype.drawItem;
+    Window_EquipItem.prototype.drawItem = function(index) {
+        _Window_EquipItem_drawItem.call(this, index);
         if (this._actor && !this.itemAt(index)) {
             const rect = this.itemLineRect(index);
-            const slotNameWidth = this.slotNameWidth();
-            this.changePaintOpacity(this.isEnabled(index));
-            this.drawText("選択した装備を外す", rect.x + slotNameWidth, rect.y,
-                rect.width - slotNameWidth, rect.height);
-            this.changePaintOpacity(true);
+            this.drawText("選択した装備を外す", rect.x, rect.y, rect.width, "center");
         }
     };
 

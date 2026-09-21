@@ -216,7 +216,13 @@ test('equipment, title with licenses, options and game-end use complete command 
         assert.equal(slots.contents.fontSize, 36, 'font size is restored after drawing');
         slots.contents.clear();
         slots.drawItem(1);
-        assert.ok(slots.contents.draws.some(draw => draw.text === '選択した装備を外す'));
+        assert.ok(!slots.contents.draws.some(draw => draw.text === '選択した装備を外す'));
+        const items = windowFor(Window_EquipItem, equip.itemWindowRect());
+        items._actor = slots._actor;
+        items._data = [null];
+        items.contents.clear();
+        items.drawItem(0);
+        assert.ok(items.contents.draws.some(draw => draw.text === '選択した装備を外す'));
         const title = sceneFor(Scene_Title);
         const rect = title.commandWindowRect();
         assertRowFits(windowFor(Window_TitleCommand, rect, 4), 4);

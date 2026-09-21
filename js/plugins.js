@@ -97,7 +97,7 @@ var $plugins =
 {"name":"BattleEquipCommand","status":true,"description":"戦闘中のアクターコマンドに「装備」を追加し、そのアクターの装備画面を開きます。(v1.0.0)","parameters":{}},
 {"name":"Menu/DestinationExternalData","status":true,"description":"固定IDの外部JSON行動目標とメニューのスクロール表示。(v1.0.0)","parameters":{"DataFile":"Destinations.json","FontSize":"24","VisibleLines":"2"}},
 {"name":"BattleCommandHierarchy","status":true,"description":"パーティーコマンドを使わない２階層のバトルコマンド。(v1.0.0)","parameters":{}},
-{"name":"EtrianPartyFormation","status":true,"description":"前衛3/後衛3の6マスに5人を割り当てる隊列編成 (v2.0.0)","parameters":{"MaxBattleMembers":"5","FrontLabel":"前衛","BackLabel":"後衛","FrontTag":"前","BackTag":"後","ReserveTag":"控え","EmptySlotText":"――――――――","FrontRowState":"0","BackRowState":"0"}},
+{"name":"EtrianPartyFormation","status":true,"description":"前衛3/後衛3の6マスに5人を割り当てる隊列編成 (v2.0.0)","parameters":{"MaxBattleMembers":"6","FrontLabel":"前衛","BackLabel":"後衛","FrontTag":"前","BackTag":"後","ReserveTag":"控え","EmptySlotText":"――――――――","FrontRowState":"3","BackRowState":"4"}},
 {"name":"Status/NRP_ExpCurve","status":true,"description":"v1.01 経験値曲線の数式を設定する。","parameters":{"DefaultExpForLevel":"(level-1)*100"}},
 {"name":"NUUN_BoxMargin","status":true,"description":"ウィンドウの余白なし","parameters":{}},
 {"name":"DashDisableSwitch","status":true,"description":"ダッシュ禁止スイッチプラグイン","parameters":{"switchId":"8"}}
