@@ -312,6 +312,7 @@
         }
         basicRows() {
             const actor = this._actor;
+            const visibleParamIds = globalThis.StatusVisibleParamIds || [2, 3, 4, 5, 6, 7];
             const rows = [
                 { label: actor.name(), heading: true },
                 { label: actor.currentClass().name, value: `${TextManager.levelA} ${actor.level}` },
@@ -319,7 +320,7 @@
                 { label: TextManager.mpA, value: `${actor.mp} / ${actor.mmp}` }
             ];
             if ($dataSystem.optDisplayTp) rows.push({ label: TextManager.tpA, value: String(actor.tp) });
-            for (let id = 2; id < 8; id++) {
+            for (const id of visibleParamIds) {
                 rows.push({ label: TextManager.param(id), value: String(actor.param(id)) });
             }
             rows.push({ label: "経験値", heading: true },
@@ -369,6 +370,7 @@
         percent(rate) { return `${Math.round(rate * 1000) / 10}%`; }
         stateRows() {
             const actor = this._actor;
+            const visibleParamIds = globalThis.StatusVisibleParamIds || [2, 3, 4, 5, 6, 7];
             const rows = [{ label: "現在のステート", value: "付与中の効果・残り期間", heading: true }];
             for (const state of actor.states()) {
                 const turns = actor._stateTurns[state.id];
@@ -385,7 +387,7 @@
             if (rows.length === 1) rows.push({ label: "ステートなし", value: "現在、付与されているステートはありません。" });
             rows.push({ label: "能力強化・弱体", value: "現在の段階と残り期間", heading: true });
             let count = 0;
-            for (let id = 0; id < 8; id++) {
+            for (const id of [0, 1, ...visibleParamIds]) {
                 const level = actor._buffs[id];
                 if (!level) continue;
                 count++;

@@ -65,6 +65,7 @@ function setup(width = 816, height = 624) {
     run(read('js/plugins.js'));
     run(`const PluginManager={_scripts:$plugins.filter(p=>p.status).map(p=>p.name),
         parameters:name=>$plugins.find(p=>p.name===name)?.parameters||{}};`);
+    run(read('js/plugins/Status/HideUnusedParameters.js'));
     run(read('js/plugins/FlexibleTopDownUI.js'));
     run(read('js/plugins/HelpWindowThreeLines.js'));
     run(`
@@ -138,6 +139,28 @@ test('command selection previews right panel; confirm focuses it and cancel rest
     `);
 });
 
+test('unused parameters are excluded from status and equipment displays', () => {
+    setup()(`
+        detail.setMode('basic');
+        const labels = detail._rows.map(row => row.label);
+        assert.deepEqual(globalThis.StatusVisibleParamIds, [2, 4, 6]);
+        assert.ok(labels.includes($dataSystem.terms.params[2]));
+        assert.ok(labels.includes($dataSystem.terms.params[4]));
+        assert.ok(labels.includes($dataSystem.terms.params[6]));
+        assert.ok(!labels.includes($dataSystem.terms.params[3]));
+        assert.ok(!labels.includes($dataSystem.terms.params[5]));
+        assert.ok(!labels.includes($dataSystem.terms.params[7]));
+        assert.equal(Window_StatusParams.prototype.maxItems(), 3);
+        const drawnParamIds = [];
+        Window_EquipStatus.prototype.drawAllParams.call({
+            itemPadding: () => 0,
+            paramY: index => index,
+            drawItem: (x, y, paramId) => drawnParamIds.push(paramId)
+        });
+        assert.deepEqual(drawnParamIds, [2, 4, 6]);
+    `);
+});
+
 test('panel arrows consume the key and focus exactly one panel', () => {
     setup()(`
         scene.openStatusDetail('states');
@@ -197,7 +220,7 @@ test('states include iconless effects, turn/walking durations, permanent effects
         assert.equal(rows.find(r=>r.label==='永続').value,'自動解除なし');
         assert.equal(rows.find(r=>r.label==='戦闘限定').value,'戦闘終了時に解除');
         assert.ok(rows.some(r=>r.value==='150%／残り 4 ターン'));
-        assert.ok(rows.some(r=>r.value==='75%／残り 2 ターン'));
+        assert.ok(!rows.some(r=>r.value==='75%／残り 2 ターン'));
     `);
 });
 
