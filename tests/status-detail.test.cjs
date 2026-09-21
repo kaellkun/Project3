@@ -88,9 +88,9 @@ function setup(width = 816, height = 624) {
 for (const [width, height] of [[816,624],[480,816],[1280,720],[816,400]]) {
     test(`status keeps two non-overlapping scrollable panels at ${width}x${height}`, () => {
         setup(width,height)(`
-            assert.deepEqual(command._list.map(c=>c.name),['弱点耐性','ステート状況','戻る']);
+            assert.deepEqual(command._list.map(c=>c.name),['ステート状況','弱点･耐性','威力増加','戻る']);
             assert.equal(command.innerHeight,command.itemHeight());
-            assert.equal(command.maxCols(),3);
+            assert.equal(command.maxCols(),4);
             assert.equal(command.isTouchOkEnabled(),true, 'commands confirm with one tap, not a double tap');
             assert.equal(basic.x,0);
             assert.equal(basic.x+basic.width,detail.x);
@@ -99,16 +99,32 @@ for (const [width, height] of [[816,624],[480,816],[1280,720],[816,400]]) {
             assert.equal(detail.y,basic.y);
             assert.equal(detail.y+detail.height,Graphics.boxHeight);
             assert.equal(basic.y+basic.height,Graphics.boxHeight);
-            assert.ok(basic.maxScrollY()>0);
-            assert.ok(detail.maxScrollY()>0);
-            basic.scrollTo(0,basic.maxScrollY());
-            assert.ok(basic.scrollY()>0);
+            assert.equal(detail._mode,'states');
+            command.selectSymbol('resistance');
+            assert.equal(detail.maxScrollY(),Math.max(0,detail.overallHeight()-detail.innerHeight));
+            // Without the equipment list the basic panel only scrolls when its rows overflow.
+            assert.equal(basic.maxScrollY(),Math.max(0,basic.overallHeight()-basic.innerHeight));
+            if (basic.maxScrollY()>0) {
+                basic.scrollTo(0,basic.maxScrollY());
+                assert.ok(basic.scrollY()>0);
+            }
             assert.equal(command.y,0);
             assert.equal(command.active,true);
             assert.equal(basic.active,false);
             assert.equal(detail.active,false);
             assert.ok(basic._rows.some(row=>row.label===actor.name()));
-            assert.ok(basic._rows.some(row=>row.label==='装備'));
+            assert.ok(!basic._rows.some(row=>row.label==='装備'), 'equipment list is not part of the status screen');
+            assert.ok(!basic._rows.some(row=>row.label===$dataSystem.equipTypes[1]));
+            // Element tables pair two entries per line; headings keep their own line.
+            const elementCount=$dataSystem.elements.filter((name,id)=>id&&name).length;
+            const firstHeading=detail._lines[0];
+            assert.equal(firstHeading.length,1);
+            assert.equal(firstHeading[0].heading,true);
+            const elementLines=detail._lines.slice(1,1+Math.ceil(elementCount/2));
+            assert.ok(elementLines.every(line=>line.length===2||line===elementLines[elementLines.length-1]));
+            assert.equal(elementLines.flat().length,elementCount);
+            assert.equal(detail._lines[1+Math.ceil(elementCount/2)][0].heading,true);
+            assert.equal(detail.itemHeight(),40);
             for (const win of [basic,detail,command]) {
                 for (const draw of win.contents.draws) {
                     assert.ok(draw.x>=0 && draw.x+draw.width<=win.innerWidth+0.01);
@@ -132,8 +148,15 @@ test('command selection previews right panel; confirm focuses it and cancel rest
         assert.equal(command.active,true);
         command.selectSymbol('resistance');
         assert.equal(detail._mode,'resistance');
+        command.selectSymbol('power');
+        assert.equal(detail._mode,'power');
+        assert.equal(detail.columns(),2);
+        command.selectSymbol('states');
+        assert.equal(detail.columns(),1);
+        assert.equal(detail.itemHeight(),76);
+        assert.ok(detail._lines.every(line=>line.length===1));
         command.selectSymbol('back');
-        assert.equal(detail._mode,'resistance');
+        assert.equal(detail._mode,'states');
         command.processOk();
         assert.equal(SceneManager.popped,true);
     `);
@@ -183,6 +206,8 @@ test('effective element and state rates include actor equipment, states and immu
                     {code:11,dataId:4,value:0.5},{code:13,dataId:4,value:0.5},{code:14,dataId:5,value:1}]};
         $dataStates.push(fixture);
         actor._states=[fixture.id];
+        $dataStates[5].note += '<StatusState:10>';
+        command.selectSymbol('resistance');
         scene.refreshActor();
         for (const id of [2,3,4]) {
             const row=detail._rows.find(row=>row.label===$dataSystem.elements[id]);
@@ -191,12 +216,47 @@ test('effective element and state rates include actor equipment, states and immu
         assert.ok(detail._rows.find(row=>row.label===$dataSystem.elements[2]).value.startsWith('弱点'));
         assert.ok(detail._rows.find(row=>row.label===$dataSystem.elements[3]).value.startsWith('無効'));
         assert.ok(detail._rows.find(row=>row.label===$dataSystem.elements[4]).value.startsWith('耐性'));
-        assert.equal(detail._rows.find(row=>row.label===$dataStates[5].name).value,'無効  0%');
+        assert.equal(detail._rows.find(row=>row.label===$dataStates[5].name).value,'無効 0%');
         const weapon=$dataWeapons.find(Boolean);
         actor._equips[0].setObject(weapon);
         weapon.traits.push({code:11,dataId:2,value:0.5});
         scene.refreshActor();
-        assert.equal(detail._rows.find(row=>row.label===$dataSystem.elements[2]).value,'耐性  75%');
+        assert.equal(detail._rows.find(row=>row.label===$dataSystem.elements[2]).value,'耐性 75%');
+    `);
+});
+
+test('element power panel reads Keke 属性威力 tags from equipment, states and passive objects', () => {
+    setup()(`
+        const fire=$dataSystem.elements.indexOf('炎');
+        const ice=$dataSystem.elements.indexOf('氷');
+        const slash=$dataSystem.elements.indexOf('斬');
+        const weapon=$dataWeapons.find(Boolean);
+        const originalNote=weapon.note;
+        weapon.note=originalNote+'\\n<属性威力: *1.5, 炎>\\n<elementAtk: +*0.5, 炎, 氷>\\n<属性威力: /2, !炎>';
+        actor._equips[0].setObject(weapon);
+        const stateId=$dataStates.length;
+        $dataStates.push({id:stateId,name:'威力検証',iconIndex:0,priority:50,traits:[{code:31,dataId:slash,value:1}],
+            note:'<属性威力: +100, 全>'});
+        actor._states=[stateId];
+        actor.passiveSkillObject=()=>[{note:'<属性威力: *1.1, 炎>'}, null];
+        scene.refreshActor();
+        command.selectSymbol('power');
+        const rows=()=>detail._rows;
+        const value=name=>rows().find(row=>row.label===name).value;
+        // (1 + 0.5) * 1.5 * 1.1 = 247.5%, flat +100 scaled by the multiplier.
+        assert.equal(value('炎'),'増加 247.5% +165');
+        assert.equal(value('氷'),'減少 75% +50');
+        assert.equal(value('雷'),'減少 50% +50');
+        assert.equal(rows().find(row=>row.label==='炎').tone,3);
+        assert.equal(value('通常攻撃の属性'),'近接物理・斬');
+        assert.equal(detail._lines[0][0].heading,true);
+        assert.equal(detail._lines[1].length,2);
+        weapon.note=originalNote;
+        actor._states=[];
+        delete actor.passiveSkillObject;
+        scene.refreshActor();
+        assert.equal(value('炎'),'通常 100%');
+        assert.equal(value('通常攻撃の属性'),'近接物理');
     `);
 });
 
@@ -221,6 +281,22 @@ test('states include iconless effects, turn/walking durations, permanent effects
         assert.equal(rows.find(r=>r.label==='戦闘限定').value,'戦闘終了時に解除');
         assert.ok(rows.some(r=>r.value==='150%／残り 4 ターン'));
         assert.ok(!rows.some(r=>r.value==='75%／残り 2 ターン'));
+    `);
+});
+
+test('state resistance list includes only scored StatusState tags in ascending priority', () => {
+    setup()(`
+        const start=$dataStates.length;
+        $dataStates.push(
+            {id:start,name:'表示優先20',iconIndex:0,note:'<StatusState:20>',traits:[]},
+            {id:start+1,name:'表示優先5',iconIndex:0,note:'<StatusState:5>',traits:[]},
+            {id:start+2,name:'表示対象外',iconIndex:0,note:'<NoLukState>',traits:[]});
+        command.selectSymbol('resistance');
+        const names=detail._rows.map(row=>row.label);
+        assert.ok(names.includes('表示優先5'));
+        assert.ok(names.includes('表示優先20'));
+        assert.ok(!names.includes('表示対象外'));
+        assert.ok(names.indexOf('表示優先5') < names.indexOf('表示優先20'));
     `);
 });
 

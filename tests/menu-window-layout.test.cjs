@@ -39,7 +39,7 @@ function setup(width = 816, height = 624) {
         const Utils = { isMobileDevice: () => false };
         const ConfigManager = {};
         const ImageManager = { loadSystem: () => ({}) };
-        const ColorManager = { normalColor: () => '#fff', outlineColor: () => '#000',
+        const ColorManager = { normalColor: () => '#fff', systemColor: () => '#ff0', outlineColor: () => '#000',
             itemBackColor1: () => '#222', itemBackColor2: () => '#111' };
         const $gameSystem = { mainFontSize: () => 36, mainFontFace: () => 'rmmz-mainfont',
             windowPadding: () => 12, windowOpacity: () => 192, windowTone: () => [0,0,0,0] };
@@ -198,6 +198,25 @@ test('equipment, title with licenses, options and game-end use complete command 
         const equip = sceneFor(Scene_Equip);
         assertRowFits(windowFor(Window_EquipCommand, equip.commandWindowRect(), 3));
         assert.equal(equip.slotWindowRect().y, equip.commandWindowRect().y + 88);
+        $dataSystem.equipTypes = ['', '武器', '靴', '頭', '身体', '装飾品', '', 'パッシブスキル用'];
+        const slots = windowFor(Window_EquipSlot, equip.slotWindowRect());
+        slots._actor = { equipSlots: () => [1, 1, 4, 3, 2, 5, 5, 5, 5, 5, 5],
+            equips: () => [], isEquipChangeOk: () => true };
+        assert.equal(slots.maxCols(), 2);
+        assert.equal(slots.maxItems(), 11);
+        assert.equal(slots.maxRows(), 6);
+        assert.equal(slots.itemRect(1).x, slots.itemRect(0).x + slots.itemWidth());
+        assert.equal(slots.itemRect(2).y, slots.itemRect(0).y + slots.itemHeight());
+        slots.resetFontSettings();
+        assert.equal(slots.slotNameWidth(), Math.min(slots.textWidth('装飾品') + slots.itemPadding(), Math.floor(slots.itemWidth() * 0.4)));
+        slots.contents.clear();
+        slots.contents.drawText = function(text, x, y, width) { this.draws.push({ text, width, size: this.fontSize }); };
+        slots.drawText('とても長い装備品の名前です', 0, 0, 100);
+        assert.ok(slots.contents.draws[0].size * slots.contents.draws[0].text.length <= 100, 'slot text shrinks to its cell');
+        assert.equal(slots.contents.fontSize, 36, 'font size is restored after drawing');
+        slots.contents.clear();
+        slots.drawItem(1);
+        assert.ok(slots.contents.draws.some(draw => draw.text === '選択した装備を外す'));
         const title = sceneFor(Scene_Title);
         const rect = title.commandWindowRect();
         assertRowFits(windowFor(Window_TitleCommand, rect, 4), 4);
@@ -208,6 +227,54 @@ test('equipment, title with licenses, options and game-end use complete command 
         const end = sceneFor(Scene_GameEnd).commandWindowRect();
         assertRowFits(windowFor(Window_GameEnd, end, 2), 2);
         assert.equal(end.y * 2 + end.height, Graphics.boxHeight);
+    `);
+});
+
+test('menu command grown from one row to all rows keeps a second-row command without a stale scroll offset', () => {
+    setup()(`
+        Number.prototype.clamp = function(min, max) { return Math.min(Math.max(this, min), max); };
+        Window.prototype.moveCursorBy = function() {};
+        Window.prototype.moveInnerChildrenBy = function() {};
+        const scene = sceneFor(Scene_Menu);
+        // Scene_Menu creates the command window before it can know its row count.
+        const win = windowFor(Window_MenuCommand, scene.commandWindowRect(), 10);
+        const remembered = win.maxCols() + 1;
+        win.forceSelect(remembered);
+        assert.ok(win.scrollY() > 0, 'a one-row frame scrolls to reveal the second row');
+        scene._commandWindow = win;
+        scene._statusWindow = panel();
+        scene._goldWindow = windowFor(Window_Gold, scene.goldWindowRect());
+        scene.relayoutMenuWindows();
+        assert.equal(win.maxScrollY(), 0);
+        assert.equal(win.scrollY(), 0);
+        assert.equal(win.topRow(), 0);
+        assert.equal(win.index(), remembered);
+        const rect = win.itemRect(remembered);
+        assert.ok(rect.y >= 0 && rect.y + rect.height <= win.innerHeight);
+        assert.equal(win.hitTest(rect.x + win.padding + 1, rect.y + win.padding + 1), remembered);
+    `);
+});
+
+test('empty skill lists announce the missing type instead of a blank panel', () => {
+    setup()(`
+        const skill = sceneFor(Scene_Skill);
+        skill._skillTypeWindow = windowFor(Window_SkillType, skill.skillTypeWindowRect(), 3);
+        skill._statusWindow = panel();
+        const list = windowFor(Window_SkillList, skill.itemWindowRect());
+        list._data = [];
+        list.contents.clear();
+        list.drawAllItems();
+        assert.equal(list.contents.draws.length, 0, 'no actor: nothing is drawn');
+        list._actor = {};
+        list.drawAllItems();
+        const notice = list.contents.draws.find(d => d.text === '該当スキルなし');
+        assert.ok(notice);
+        assert.ok(notice.x >= 0 && notice.x + notice.width <= list.innerWidth);
+        list._data = [{ id: 1 }];
+        list.contents.clear();
+        list.drawItem = () => {};
+        list.drawAllItems();
+        assert.ok(!list.contents.draws.some(d => d.text === '該当スキルなし'));
     `);
 });
 

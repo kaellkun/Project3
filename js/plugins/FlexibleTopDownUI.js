@@ -20,11 +20,14 @@
  * 2. Help Window: Bottom-aligned at the very bottom of the screen.
  * 3. PC (Landscape): Parallel multi-column content layout in the middle.
  * 4. Mobile (Portrait): Vertical stacked content in the middle with bottom-sheet modals.
- * 5. Status: Fixed basic-information panel on the left; weakness/resistance or
- *    active states on the right, selected by three commands at the top.
+ * 5. Status: Fixed basic-information panel on the left (no equipment list);
+ *    active states, weakness/resistance or element power boosts on the right,
+ *    selected by four commands at the top. Element tables use two entries per line.
  *    Confirm to browse details, Left/Right to change panels, Cancel to return
  *    to commands. Q/W or the page buttons change actors. Both panels support
  *    wheel/touch scrolling; the Back command exits the status screen.
+ * 6. Equip: slots are listed in two columns; long names shrink to fit.
+ * 7. Skill: an empty skill type shows "該当スキルなし" instead of a blank list.
  */
 
 (() => {
@@ -59,6 +62,10 @@
         if (resized && win.contents) {
             win.createContents();
             win.refresh();
+            // A window built at a smaller size (one-row command bar) may still
+            // hold a scroll offset that the grown frame no longer needs.
+            if (win.maxScrollY && win.scrollY() > win.maxScrollY()) win.scrollTo(win.scrollX(), win.maxScrollY());
+            if (win.ensureCursorVisible && win.index() >= 0) win.ensureCursorVisible(false);
             if (win.refreshCursor) win.refreshCursor();
         }
     };
@@ -71,19 +78,58 @@
         return _Window_Command_itemHeight.call(this) + commandTextExtraPadding;
     };
 
-    const _Window_Command_drawText = Window_Command.prototype.drawText;
-    Window_Command.prototype.drawText = function(text, x, y, maxWidth, align) {
-        // MainFontLetterSpacing draws glyphs individually and cannot rely on
-        // Canvas maxWidth compression. Fit long labels without losing padding.
-        const fontSize = this.contents.fontSize;
-        const width = this.textWidth(text);
-        if (maxWidth > 0 && width > maxWidth) {
-            this.contents.fontSize = Math.max(1, Math.floor(fontSize * maxWidth / width));
+    // MainFontLetterSpacing draws glyphs individually and cannot rely on
+    // Canvas maxWidth compression. Fit long labels without losing padding.
+    const installFittedDrawText = prototype => {
+        const original = prototype.drawText;
+        prototype.drawText = function(text, x, y, maxWidth, align) {
+            const fontSize = this.contents.fontSize;
+            const width = this.textWidth(text);
+            if (maxWidth > 0 && width > maxWidth) {
+                this.contents.fontSize = Math.max(1, Math.floor(fontSize * maxWidth / width));
+            }
+            try {
+                original.call(this, text, x, y, maxWidth, align);
+            } finally {
+                this.contents.fontSize = fontSize;
+            }
+        };
+    };
+    installFittedDrawText(Window_Command.prototype);
+    installFittedDrawText(Window_EquipSlot.prototype);
+
+    Window_EquipSlot.prototype.maxCols = function() {
+        return 2;
+    };
+
+    Window_EquipSlot.prototype.slotNameWidth = function() {
+        const names = this._actor ? this._actor.equipSlots().map(id => $dataSystem.equipTypes[id]) : [];
+        const widest = Math.max(0, ...names.map(name => this.textWidth(name || "")));
+        return Math.min(widest + this.itemPadding(), Math.floor(this.itemWidth() * 0.4));
+    };
+
+    const _Window_EquipSlot_drawItem = Window_EquipSlot.prototype.drawItem;
+    Window_EquipSlot.prototype.drawItem = function(index) {
+        _Window_EquipSlot_drawItem.call(this, index);
+        if (this._actor && !this.itemAt(index)) {
+            const rect = this.itemLineRect(index);
+            const slotNameWidth = this.slotNameWidth();
+            this.changePaintOpacity(this.isEnabled(index));
+            this.drawText("選択した装備を外す", rect.x + slotNameWidth, rect.y,
+                rect.width - slotNameWidth, rect.height);
+            this.changePaintOpacity(true);
         }
-        try {
-            _Window_Command_drawText.call(this, text, x, y, maxWidth, align);
-        } finally {
-            this.contents.fontSize = fontSize;
+    };
+
+    const _Window_SkillList_drawAllItems = Window_SkillList.prototype.drawAllItems;
+    Window_SkillList.prototype.drawAllItems = function() {
+        _Window_SkillList_drawAllItems.call(this);
+        if (this._actor && this._data && this._data.length === 0) {
+            const rect = this.itemLineRect(0);
+            this.resetFontSettings();
+            this.changePaintOpacity(false);
+            this.drawText("該当スキルなし", rect.x, rect.y, this.innerWidth - rect.x * 2, "center");
+            this.changePaintOpacity(true);
         }
     };
 
@@ -261,11 +307,12 @@
     // Scene_Status - Basic information + switchable details
     //-----------------------------------------------------------------------------
     class Window_StatusDetailCommand extends Window_HorzCommand {
-        maxCols() { return 3; }
+        maxCols() { return 4; }
         isTouchOkEnabled() { return true; }
         makeCommandList() {
-            this.addCommand("弱点耐性", "resistance");
             this.addCommand("ステート状況", "states");
+            this.addCommand("弱点･耐性", "resistance");
+            this.addCommand("威力増加", "power");
             this.addCommand("戻る", "back");
         }
         callUpdateHelp() {
@@ -282,11 +329,14 @@
     class Window_StatusDetailList extends Window_Selectable {
         initialize(rect) {
             this._rows = [];
-            this._mode = "resistance";
+            this._lines = [];
+            this._mode = "states";
             super.initialize(rect);
         }
-        maxItems() { return this._rows.length; }
-        itemHeight() { return this._mode === "basic" ? 40 : 76; }
+        maxItems() { return this._lines.length; }
+        itemHeight() { return this._mode === "states" ? 76 : 40; }
+        // Element tables show two entries per line; headings always span the line.
+        columns() { return this._mode === "resistance" || this._mode === "power" ? 2 : 1; }
         isScrollEnabled() { return true; }
         drawItemBackground() {} // Read-only information, not a grid of buttons.
         setActor(actor) {
@@ -301,6 +351,13 @@
         }
         rebuild() {
             this._rows = this._actor ? this.makeRows() : [];
+            this._lines = [];
+            const columns = this.columns();
+            for (const row of this._rows) {
+                const last = this._lines[this._lines.length - 1];
+                if (!row.heading && last && !last[0].heading && last.length < columns) last.push(row);
+                else this._lines.push([row]);
+            }
             this.scrollTo(0, 0);
             this.select(this.active && this.maxItems() ? 0 : -1);
             this.refresh();
@@ -308,7 +365,13 @@
         makeRows() {
             if (this._mode === "basic") return this.basicRows();
             if (this._mode === "states") return this.stateRows();
+            if (this._mode === "power") return this.powerRows();
             return this.resistanceRows();
+        }
+
+        stateDisplayPriority(state) {
+            const match = String(state?.note || "").match(/<StatusState\s*:\s*(-?\d+(?:\.\d+)?)\s*>/i);
+            return match ? Number(match[1]) : null;
         }
         basicRows() {
             const actor = this._actor;
@@ -325,11 +388,7 @@
             }
             rows.push({ label: "経験値", heading: true },
                 { label: "現在", value: String(actor.currentExp()) },
-                { label: "次のレベルまで", value: actor.isMaxLevel() ? "――" : String(actor.nextRequiredExp()) },
-                { label: "装備", heading: true });
-            actor.equips().forEach((item, index) => rows.push({
-                label: $dataSystem.equipTypes[actor.equipSlots()[index]], value: item ? item.name : "なし"
-            }));
+                { label: "次のレベルまで", value: actor.isMaxLevel() ? "――" : String(actor.nextRequiredExp()) });
             const profile = [actor.nickname(), actor.profile()].filter(Boolean).join("\n");
             if (profile) {
                 rows.push({ label: "プロフィール", heading: true });
@@ -350,21 +409,72 @@
         }
         resistanceRows() {
             const actor = this._actor;
-            const rows = [{ label: "属性の弱点・耐性", value: "ダメージ倍率（100%が通常）", heading: true }];
+            const rows = [{ label: "属性の弱点・耐性", value: "被ダメ 100%が通常", heading: true }];
             $dataSystem.elements.forEach((name, id) => {
                 if (!id || !name) return;
                 const rate = actor.elementRate(id);
                 const type = rate < 0 ? "吸収" : rate === 0 ? "無効" : rate < 1 ? "耐性" : rate > 1 ? "弱点" : "通常";
-                rows.push({ label: name, value: `${type}  ${this.percent(rate)}`, tone: rate > 1 ? 2 : rate < 1 ? 3 : null });
+                rows.push({ label: name, value: `${type} ${this.percent(rate)}`, tone: rate > 1 ? 2 : rate < 1 ? 3 : null });
             });
-            rows.push({ label: "状態異常の耐性", value: "付与率の補正（100%が通常）", heading: true });
-            for (const state of $dataStates) {
-                if (!state || !state.name) continue;
+            rows.push({ label: "状態異常の耐性", value: "付与率 100%が通常", heading: true });
+            const displayStates = $dataStates.filter(state => state && state.name &&
+                this.stateDisplayPriority(state) !== null)
+                .sort((a, b) => this.stateDisplayPriority(a) - this.stateDisplayPriority(b) || a.id - b.id);
+            for (const state of displayStates) {
                 const rate = actor.isStateResist(state.id) ? 0 : actor.stateRate(state.id);
                 const type = rate === 0 ? "無効" : rate < 1 ? "耐性" : rate > 1 ? "弱点" : "通常";
-                rows.push({ label: state.name, icon: state.iconIndex, value: `${type}  ${this.percent(rate)}`,
+                rows.push({ label: state.name, icon: state.iconIndex, value: `${type} ${this.percent(rate)}`,
                     tone: rate > 1 ? 2 : rate < 1 ? 3 : null });
             }
+            return rows;
+        }
+        // Keke_ElementFullCustom "属性威力" tags: "*n" multiplies, "+*n" adds n×damage,
+        // "+n" adds a flat amount; targets are element names, "全", or "!name".
+        elementPowerRates() {
+            const actor = this._actor;
+            const passives = typeof actor.passiveSkillObject === "function" ? actor.passiveSkillObject() : [];
+            const objects = [actor.actor(), actor.currentClass(), ...actor.equips(), ...actor.states(), ...passives];
+            const tags = objects.filter(Boolean).flatMap(object =>
+                [...String(object.note || "").matchAll(/<(?:属性威力|elementAtk)\s*:([^>]*)>/gi)]
+                    .map(match => match[1].replace(/\s/g, "")));
+            const rates = $dataSystem.elements.map(() => ({ times: 1, add: 0, flat: 0 }));
+            for (const tag of tags) {
+                const [calc, ...targets] = tag.split(",");
+                const parsed = calc.match(/^([+\-*/]*)(\d*\.?\d*)/);
+                if (!parsed || !targets.length) continue;
+                const symbol = parsed[1] || "+";
+                const num = Number(parsed[2]) || 0;
+                const anti = targets[0].includes("!");
+                const names = targets.map(name => name.replace(/!/g, ""));
+                const all = names.some(name => /全|all/i.test(name));
+                rates.forEach((rate, id) => {
+                    if (!id || !$dataSystem.elements[id]) return;
+                    const listed = names.includes($dataSystem.elements[id]);
+                    if (!(all || (anti ? !listed : listed))) return;
+                    const sign = symbol.includes("-") ? -1 : 1;
+                    if (/[*/]/.test(symbol) && /[+\-]/.test(symbol)) rate.add += sign * (symbol.includes("/") ? 1 / num : num);
+                    else if (symbol.includes("/")) rate.times *= 1 / num;
+                    else if (symbol.includes("*")) rate.times *= num;
+                    else rate.flat += sign * num;
+                });
+            }
+            return rates.map(rate => ({ rate: (1 + rate.add) * rate.times, flat: rate.flat * rate.times }));
+        }
+        powerRows() {
+            const actor = this._actor;
+            const rows = [{ label: "属性の威力増加", value: "与ダメ 100%が通常", heading: true }];
+            const power = this.elementPowerRates();
+            $dataSystem.elements.forEach((name, id) => {
+                if (!id || !name) return;
+                const { rate, flat } = power[id];
+                const type = rate > 1 ? "増加" : rate < 1 ? "減少" : "通常";
+                const extra = flat ? ` ${flat > 0 ? "+" : ""}${Math.round(flat)}` : "";
+                rows.push({ label: name, value: `${type} ${this.percent(rate)}${extra}`,
+                    tone: rate > 1 || flat > 0 ? 3 : rate < 1 || flat < 0 ? 2 : null });
+            });
+            const attack = [...new Set(actor.attackElements())].sort((a, b) => a - b)
+                .map(id => $dataSystem.elements[id]).filter(Boolean);
+            rows.push({ label: "通常攻撃の属性", value: attack.join("・") || "なし", heading: true });
             return rows;
         }
         percent(rate) { return `${Math.round(rate * 1000) / 10}%`; }
@@ -408,23 +518,34 @@
             this.contents.fontSize = size;
         }
         drawItem(index) {
-            const row = this._rows[index];
+            const line = this._lines[index];
             const rect = this.itemRectWithPadding(index);
+            const gap = line.length > 1 ? contentGap * 2 : 0;
+            const cellWidth = Math.floor((rect.width - gap * (line.length - 1)) / line.length);
+            line.forEach((row, i) => this.drawCell(row, rect.x + (cellWidth + gap) * i, rect.y, cellWidth, line.length));
+        }
+        drawCell(row, x, y, width, cells) {
             this.resetFontSettings();
-            this.contents.fontSize = this.detailFontSize();
+            this.contents.fontSize = cells > 1 ? Math.min(this.detailFontSize(), 20) : this.detailFontSize();
             this.changeTextColor(row.heading ? ColorManager.systemColor() : ColorManager.normalColor());
-            let x = rect.x;
+            const left = x;
             if (row.icon) {
-                this.drawIcon(row.icon, x, rect.y + 2);
+                this.drawIcon(row.icon, x, y + 2);
                 x += ImageManager.iconWidth + 6;
+                width -= ImageManager.iconWidth + 6;
             }
-            const width = rect.width - (x - rect.x);
-            const paired = this._mode === "basic" && row.value !== undefined;
-            this.drawFittedText(row.label, x, rect.y, paired ? width * 0.48 : width);
-            if (row.value !== undefined) {
-                this.changeTextColor(row.tone != null ? ColorManager.textColor(row.tone) : ColorManager.normalColor());
-                this.drawFittedText(row.value, paired ? x + width * 0.48 : rect.x,
-                    rect.y + (paired ? 0 : this.lineHeight()), paired ? width * 0.52 : rect.width, paired ? "right" : "left");
+            const valueColor = row.tone != null ? ColorManager.textColor(row.tone) : ColorManager.normalColor();
+            if (row.value === undefined) {
+                this.drawFittedText(row.label, x, y, width);
+            } else if (this._mode === "states") {
+                this.drawFittedText(row.label, x, y, width);
+                this.changeTextColor(valueColor);
+                this.drawFittedText(row.value, left, y + this.lineHeight(), width + x - left);
+            } else {
+                const labelWidth = Math.min(this.textWidth(row.label), Math.floor(width * 0.55));
+                this.drawFittedText(row.label, x, y, labelWidth);
+                this.changeTextColor(valueColor);
+                this.drawFittedText(row.value, x + labelWidth + contentGap, y, width - labelWidth - contentGap, "right");
             }
         }
         cursorLeft() {
@@ -450,6 +571,7 @@
         const command = this._statusCommandWindow;
         command._detailWindow = this._statusDetailWindow;
         command.setHandler("resistance", () => this.openStatusDetail("resistance"));
+        command.setHandler("power", () => this.openStatusDetail("power"));
         command.setHandler("states", () => this.openStatusDetail("states"));
         command.setHandler("back", this.popScene.bind(this));
         command.setHandler("cancel", this.popScene.bind(this));
