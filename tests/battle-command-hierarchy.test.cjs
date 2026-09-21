@@ -353,7 +353,7 @@ test('fight first five commands are types 1, 2, item, 3, 4 with Back last', () =
         const scene = battleScene(), win = scene._actorCommandWindow;
         choose(win, 'fightMenu');
         assert.deepEqual(commandShape(win), [
-            ['弱攻撃', 'skill', 1], ['強攻撃', 'skill', 2], ['アイテム', 'item', null],
+            ['攻撃技', 'skill', 1], ['必殺技', 'skill', 2], ['アイテム', 'item', null],
             ['補助･回復', 'skill', 3], ['妨害', 'skill', 4], ['戻る', 'commandBack', null]
         ]);
         assert.ok(win._list.every(c => c.enabled));
@@ -1022,7 +1022,7 @@ test('disabled hierarchy labels stay readable despite the vendor seal overlay se
         win.setBattleCommandLayer('fight');
         assert.equal(win._list.find(c => c.ext === 2).enabled, false);
         const drawn = win.contents.text.map(args => args[0]);
-        assert.ok(drawn.includes('強攻撃'));
+        assert.ok(drawn.includes('必殺技'));
         assert.equal(drawn.some(text => String(text).includes('禁止')), false);
     `);
 });

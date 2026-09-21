@@ -1035,10 +1035,11 @@
     Scene_Battle.prototype.commandBattleFormation = function() {
         this._actorCommandWindow.deactivate();
         this._battleFormationBefore = $gameParty.formationSlots().slice();
+        this._battleFormationActor = BattleManager.actor();
         this._battleFormationPending = null;
-        this._battleFormationRoster.setList($gameParty.allMembers());
-        this._battleFormationRoster.selectActor(BattleManager.actor());
-        if (this._battleFormationRoster.index() < 0) this._battleFormationRoster.select(0);
+        const targets = $gameParty.battleMembers().filter(actor => actor !== this._battleFormationActor);
+        this._battleFormationRoster.setList(targets);
+        this._battleFormationRoster.select(0);
         this._battleFormationGrid.deselect();
         this._battleFormationGrid.refresh();
         this._battleFormationRoster.show();
@@ -1047,15 +1048,15 @@
     };
 
     Scene_Battle.prototype.onBattleFormationRosterOk = function() {
-        const actor = this._battleFormationRoster.item();
-        if (!actor) {
+        const target = this._battleFormationRoster.item();
+        if (!target) {
             this._battleFormationRoster.activate();
             return;
         }
-        this._battleFormationPending = actor;
-        const slot = $gameParty.slotIndexOfActor(actor);
+        this._battleFormationPending = target;
+        const slot = $gameParty.slotIndexOfActor(target);
         this._battleFormationRoster.deactivate();
-        this._battleFormationGrid.select(slot >= 0 ? slot : 0);
+        this._battleFormationGrid.select(slot >= 0 ? slot : -1);
         this._battleFormationGrid.activate();
     };
 
@@ -1067,20 +1068,20 @@
     };
 
     Scene_Battle.prototype.onBattleFormationGridOk = function() {
-        const actor = this._battleFormationPending;
-        if (!actor || !$gameParty.assignFormationSlot(actor, this._battleFormationGrid.index())) {
+        const actor = this._battleFormationActor;
+        const target = this._battleFormationPending;
+        const targetSlot = target ? $gameParty.slotIndexOfActor(target) : -1;
+        if (!actor || !target || actor === target || targetSlot < 0 ||
+            this._battleFormationGrid.index() !== targetSlot ||
+            !$gameParty.assignFormationSlot(actor, targetSlot)) {
             SoundManager.playBuzzer();
             this._battleFormationGrid.activate();
             return;
         }
         SoundManager.playEquip();
         this._battleFormationPending = null;
-        this._battleFormationRoster.setList($gameParty.allMembers());
-        this._battleFormationRoster.selectActor(actor);
         this._battleFormationGrid.refresh();
-        this._battleFormationGrid.deselect();
-        this._battleFormationGrid.deactivate();
-        this._battleFormationRoster.activate();
+        this.consumeTurnForFormation(this._battleFormationBefore, $gameParty.formationSlots());
     };
 
     Scene_Battle.prototype.hideBattleFormationWindows = function() {
@@ -1090,6 +1091,7 @@
             win.deactivate();
         }
         this._battleFormationPending = null;
+        this._battleFormationActor = null;
     };
 
     Scene_Battle.prototype.onBattleFormationRosterCancel = function() {

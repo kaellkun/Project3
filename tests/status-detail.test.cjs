@@ -284,6 +284,22 @@ test('states include iconless effects, turn/walking durations, permanent effects
     `);
 });
 
+test('state details use DescriptionExtend text from either supported note tag', () => {
+    setup()(`
+        const start=$dataStates.length;
+        $dataStates.push(
+            {id:start,name:'拡張説明',iconIndex:0,traits:[],note:'<拡張説明:戦闘中に効果が続く。>'},
+            {id:start+1,name:'ExtendDesc',iconIndex:0,traits:[],note:'<ExtendDesc:特別な状態の説明。>'});
+        actor._states=[start,start+1];
+        scene.refreshActor();
+        command.selectSymbol('states');
+        assert.equal(detail._rows.find(r=>r.label==='詳細説明' && r.value==='戦闘中に効果が続く。').value,
+            '戦闘中に効果が続く。');
+        assert.equal(detail._rows.find(r=>r.label==='詳細説明' && r.value==='特別な状態の説明。').value,
+            '特別な状態の説明。');
+    `);
+});
+
 test('state resistance list includes only scored StatusState tags in ascending priority', () => {
     setup()(`
         const start=$dataStates.length;

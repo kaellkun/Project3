@@ -488,6 +488,8 @@
                     duration = "戦闘終了時に解除";
                 }
                 rows.push({ label: state.name, icon: state.iconIndex, value: duration });
+                const description = this.stateExtendedDescription(state);
+                if (description) rows.push({ label: "詳細説明", value: description });
                 if (state.removeByWalking) rows.push({ label: "歩行で解除", value: `残り ${actor._stateSteps[state.id] ?? state.stepsToRemove} 歩` });
             }
             if (rows.length === 1) rows.push({ label: "ステートなし", value: "現在、付与されているステートはありません。" });
@@ -504,6 +506,16 @@
             }
             if (!count) rows.push({ label: "強化・弱体なし", value: "能力値への一時的な補正はありません。" });
             return rows;
+        }
+        stateExtendedDescription(state) {
+            if (globalThis.PluginManagerEx?.findMetaValue) {
+                const value = PluginManagerEx.findMetaValue(state, ["拡張説明", "ExtendDesc"]);
+                if (value) return String(value);
+            }
+            const value = state?.meta?.拡張説明 ?? state?.meta?.ExtendDesc;
+            if (value) return String(value);
+            const match = String(state?.note || "").match(/<(?:拡張説明|ExtendDesc)\s*:\s*([^>]*)>/i);
+            return match ? match[1].trim() : "";
         }
         detailFontSize() { return Math.min($gameSystem.mainFontSize(), this.innerWidth < 280 ? 20 : 24); }
         drawFittedText(text, x, y, width, align = "left") {

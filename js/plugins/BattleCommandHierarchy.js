@@ -14,7 +14,7 @@
  *
  * @help
  * 関連する戦闘/UIプラグインより下に配置してください。
- * 戦う → 弱攻撃(タイプ1)、強攻撃(2)、アイテム、補助･回復(3)、妨害(4)
+ * 戦う → 攻撃技(タイプ1)、必殺技(2)、アイテム、補助･回復(3)、妨害(4)
  * オート → NRP_AutoBattleの全員自動戦闘。キャンセルで解除。
  * 戦況確認 → 味方ステータス、敵ステータス、バトルログ
  * 編成変更 → 隊列変更、装備変更
@@ -51,7 +51,7 @@
                 this.addItemCommand();
                 const available = this._list.slice();
                 this.clearCommandList();
-                for (const [name, type] of [["弱攻撃", 1], ["強攻撃", 2],
+                for (const [name, type] of [["攻撃技", 1], ["必殺技", 2],
                     ["アイテム", 0], ["補助･回復", 3], ["妨害", 4]]) {
                     const symbol = type ? "skill" : "item";
                     const entry = available.find(c => c.symbol === symbol && (!type || c.ext === type));
@@ -152,8 +152,9 @@
     const startAction = BattleManager.startAction;
     BattleManager.startAction = function() {
         const subject = this._subject;
+        const isReaction = !!subject?.currentAction()?._isReactionKe;
         startAction.apply(this, arguments);
-        if (subject && this._logWindow) {
+        if (subject && this._logWindow && !isReaction) {
             this._logWindow._methods.unshift({
                 name: "addText",
                 params: [`${subject.name()}のターン！`]
