@@ -3,13 +3,14 @@
 //=============================================================================
 /*:
  * @target MZ
- * @plugindesc 前衛/後衛付き5人パーティー編成 (v1.0.0)
+ * @plugindesc 前衛3/後衛3の6マスに5人を割り当てる隊列編成 (v2.0.0)
  * @author Copilot
  *
  * @param MaxBattleMembers
  * @text 最大戦闘人数
  * @type number
  * @min 1
+ * @max 6
  * @default 5
  *
  * @param FrontLabel
@@ -20,10 +21,6 @@
  * @text 後衛ラベル
  * @default 後衛
  *
- * @param ReserveLabel
- * @text 控えラベル
- * @default 控えメンバー
- *
  * @param FrontTag
  * @text 前衛タグ(短縮)
  * @default 前
@@ -32,23 +29,49 @@
  * @text 後衛タグ(短縮)
  * @default 後
  *
- * @help
- * メニューの「並び替え」コマンドを、前衛/後衛を持つ5人パーティー編成画面に
- * 差し替えます。
+ * @param ReserveTag
+ * @text 控えタグ
+ * @default 控え
  *
- * ・戦闘参加人数がMaxBattleMembers以下のときは前衛/後衛を自由に選べます
- *   （前衛には最低1人必要）。
- * ・戦闘参加人数がMaxBattleMembers人ちょうどいる状態で、控えメンバーが
- *   いる場合は、控えと入れ替えできます。
- * ・戦闘中のアクターウィンドウにも前衛/後衛タグを表示します。
+ * @param EmptySlotText
+ * @text 空きマス表示
+ * @default ――――――――
+ *
+ * @param FrontRowState
+ * @text 前衛ステート
+ * @type state
+ * @default 0
+ * @desc 前衛にいる間ずっと付与するステート。0で無し。
+ *
+ * @param BackRowState
+ * @text 後衛ステート
+ * @type state
+ * @default 0
+ * @desc 後衛にいる間ずっと付与するステート。0で無し。
+ *
+ * @help
+ * メニューの「並び替え」コマンドを、前衛3・後衛3の合計6マスに全メンバーから
+ * 最大MaxBattleMembers人を割り当てる隊列編成画面に差し替えます。
+ *
+ * 左側: 全パーティメンバーの一覧（配置済みなら前1〜3/後1〜3、未配置なら控え）
+ * 右側: 前衛3マス・後衛3マスのグリッド（割り当て済みメンバー名 or 空きマス）
  *
  * 操作:
- *   前衛/後衛ウィンドウでOK … その場で前衛⇔後衛を切り替え
- *   控えウィンドウでOK … 交代待ちにして前衛/後衛のメンバーを選択
- *   前衛/後衛ウィンドウでキャンセル(交代待ち中) … 交代を中止
- *   前衛/後衛ウィンドウでキャンセル(通常時) … メニューへ戻る
+ *   左の一覧でOK … そのメンバーを選択して右のマス選択に移る
+ *   右のマスでOK … 選択中のメンバーをそのマスに配置（既にいる場合は入れ替え）
+ *   右のマスでキャンセル … 配置を中止して左の一覧に戻る
+ *   左の一覧でキャンセル … 編成を終えてメニューへ戻る
  *
- * プラグインコマンドはありません。既存セーブでも利用できます。
+ * 前衛(スロット1〜3)には最低1人必要です。それ以外は自由に配置できます。
+ * 戦闘中のアクターウィンドウも、前衛グループを上段、後衛グループを下段に
+ * 分けて表示します（HP/MP横並び、TP常時表示、TPBゲージ無し）。
+ *
+ * 前衛ステート/後衛ステートを設定すると、そのマスにいる間は常に付与され、
+ * 列を移ると入れ替わります。控えには付与しません。解除されても自動で
+ * 再付与されるため、通常のステート解除手段では外れません。
+ *
+ * プラグインコマンドはありません。既存セーブでも利用できます
+ * （初回アクセス時に現在のバトルメンバーを前衛優先で自動配置します）。
  */
 
 (() => {
@@ -56,46 +79,179 @@
 
     const PLUGIN_NAME = "EtrianPartyFormation";
     const params = PluginManager.parameters(PLUGIN_NAME);
-    const maxBattleMembers = Math.max(1, Number(params.MaxBattleMembers) || 5);
+    const maxBattleMembers = Math.min(6, Math.max(1, Number(params.MaxBattleMembers) || 5));
     const frontLabel = String(params.FrontLabel || "前衛");
     const backLabel = String(params.BackLabel || "後衛");
-    const reserveLabel = String(params.ReserveLabel || "控えメンバー");
     const frontTag = String(params.FrontTag || "前");
     const backTag = String(params.BackTag || "後");
+    const reserveTag = String(params.ReserveTag || "控え");
+    const emptySlotText = String(params.EmptySlotText || "――――――――");
+    const frontRowStateId = Number(params.FrontRowState) || 0;
+    const backRowStateId = Number(params.BackRowState) || 0;
+    const FRONT_SLOTS = 3;
+    const BACK_SLOTS = 3;
+    const TOTAL_SLOTS = FRONT_SLOTS + BACK_SLOTS;
 
     //-------------------------------------------------------------------
-    // Game_Party / Game_Actor - front/back row bookkeeping
+    // Game_Party - fixed 6-slot (front3/back3) formation grid
     //-------------------------------------------------------------------
     Game_Party.prototype.maxBattleMembers = function() {
         return maxBattleMembers;
     };
 
-    Game_Party.prototype.formationActiveMembers = function() {
-        return this.allBattleMembers();
+    Game_Party.prototype.formationSlots = function() {
+        if (!this._formationSlots) this.initFormationSlots();
+        return this._formationSlots;
     };
 
-    Game_Party.prototype.formationReserveMembers = function() {
-        return this.allMembers().slice(this.maxBattleMembers());
+    Game_Party.prototype.initFormationSlots = function() {
+        this._formationSlots = new Array(TOTAL_SLOTS).fill(null);
+        const members = this.allBattleMembers();
+        for (let i = 0; i < members.length && i < TOTAL_SLOTS; i++) {
+            this._formationSlots[i] = members[i].actorId();
+        }
+        this.refreshFormationRowStates();
+    };
+
+    Game_Party.prototype.slotIndexOfActor = function(actor) {
+        return actor ? this.formationSlots().indexOf(actor.actorId()) : -1;
+    };
+
+    Game_Party.prototype.actorInSlot = function(slotIndex) {
+        const id = this.formationSlots()[slotIndex];
+        return id ? $gameActors.actor(id) : null;
     };
 
     Game_Party.prototype.formationFrontMembers = function() {
-        return this.formationActiveMembers().filter(actor => actor.isFrontRow());
+        return this.formationSlots()
+            .slice(0, FRONT_SLOTS)
+            .map(id => (id ? $gameActors.actor(id) : null))
+            .filter(actor => actor);
     };
 
     Game_Party.prototype.formationBackMembers = function() {
-        return this.formationActiveMembers().filter(actor => !actor.isFrontRow());
+        return this.formationSlots()
+            .slice(FRONT_SLOTS, TOTAL_SLOTS)
+            .map(id => (id ? $gameActors.actor(id) : null))
+            .filter(actor => actor);
     };
 
-    Game_Actor.prototype.formationRow = function() {
-        return this._formationRow === "back" ? "back" : "front";
+    Game_Party.prototype.formationReserveMembers = function() {
+        const slots = this.formationSlots();
+        return this.allMembers().filter(actor => !slots.includes(actor.actorId()));
     };
 
-    Game_Actor.prototype.setFormationRow = function(row) {
-        this._formationRow = row === "back" ? "back" : "front";
+    Game_Party.prototype.syncActorsWithFormation = function() {
+        const activeIds = this.formationSlots().filter(id => id);
+        const others = this._actors.filter(id => !activeIds.includes(id));
+        this._actors = activeIds.concat(others);
+        this.refreshFormationRowStates();
+        $gamePlayer.refresh();
     };
 
-    Game_Actor.prototype.isFrontRow = function() {
-        return this.formationRow() === "front";
+    Game_Party.prototype.refreshFormationRowStates = function() {
+        for (const actor of this.allMembers()) actor.refresh();
+    };
+
+    // Places actor into slotIndex, swapping with whoever already occupies it.
+    // Returns false (no change) if this would empty the front row or exceed
+    // the active member cap.
+    Game_Party.prototype.assignFormationSlot = function(actor, slotIndex) {
+        const slots = this.formationSlots();
+        const oldSlot = slots.indexOf(actor.actorId());
+        if (oldSlot === slotIndex) return true;
+        const occupantId = slots[slotIndex];
+        const filledCount = slots.filter(id => id).length;
+        if (oldSlot < 0 && !occupantId && filledCount >= maxBattleMembers) {
+            return false;
+        }
+        const next = slots.slice();
+        if (oldSlot >= 0) next[oldSlot] = occupantId || null;
+        next[slotIndex] = actor.actorId();
+        const frontCount = next.slice(0, FRONT_SLOTS).filter(id => id).length;
+        if (frontCount === 0) return false;
+        this._formationSlots = next;
+        this.syncActorsWithFormation();
+        return true;
+    };
+
+    Game_Party.prototype.autoAssignFormationSlot = function(actorId) {
+        const slots = this.formationSlots();
+        if (slots.includes(actorId)) return;
+        if (slots.filter(id => id).length >= maxBattleMembers) return;
+        const emptyIndex = slots.findIndex(id => !id);
+        if (emptyIndex >= 0) {
+            slots[emptyIndex] = actorId;
+            this.syncActorsWithFormation();
+        }
+    };
+
+    const _Game_Party_addActor = Game_Party.prototype.addActor;
+    Game_Party.prototype.addActor = function(actorId) {
+        const isNew = !this._actors.includes(actorId);
+        _Game_Party_addActor.call(this, actorId);
+        if (isNew) this.autoAssignFormationSlot(actorId);
+    };
+
+    // New game and loaded saves: place members (and their row states) eagerly.
+    const _Game_Party_setupStartingMembers = Game_Party.prototype.setupStartingMembers;
+    Game_Party.prototype.setupStartingMembers = function() {
+        _Game_Party_setupStartingMembers.call(this);
+        this.initFormationSlots();
+    };
+
+    const _Game_System_onAfterLoad = Game_System.prototype.onAfterLoad;
+    Game_System.prototype.onAfterLoad = function() {
+        _Game_System_onAfterLoad.call(this);
+        $gameParty.formationSlots();
+        $gameParty.refreshFormationRowStates();
+    };
+
+    const _Game_Party_removeActor = Game_Party.prototype.removeActor;
+    Game_Party.prototype.removeActor = function(actorId) {
+        _Game_Party_removeActor.call(this, actorId);
+        const slots = this.formationSlots();
+        const idx = slots.indexOf(actorId);
+        if (idx >= 0) slots[idx] = null;
+        $gameActors.actor(actorId)?.refresh();
+    };
+
+    //-------------------------------------------------------------------
+    // Game_Actor - row states follow the slot; re-applied on every refresh
+    //-------------------------------------------------------------------
+    Game_Actor.prototype.formationRowStateId = function() {
+        const slots = $gameParty?._formationSlots;
+        if (!slots || !$gameParty._actors.includes(this.actorId())) return 0;
+        const slot = slots.indexOf(this.actorId());
+        if (slot < 0) return 0;
+        return slot < FRONT_SLOTS ? frontRowStateId : backRowStateId;
+    };
+
+    // Uses addNewState/eraseState (not addState/removeState) so row changes
+    // never produce battle-log "state added" messages or trigger refresh loops.
+    Game_Actor.prototype.syncFormationRowStates = function() {
+        if (!frontRowStateId && !backRowStateId) return;
+        const wanted = this.formationRowStateId();
+        for (const id of [frontRowStateId, backRowStateId]) {
+            if (id && id !== wanted && this.isStateAffected(id)) this.eraseState(id);
+        }
+        if (wanted && !this.isStateAffected(wanted) && this.isStateAddable(wanted)) {
+            this.addNewState(wanted);
+            this.resetStateCounts(wanted);
+        }
+    };
+
+    const _Game_Actor_refresh = Game_Actor.prototype.refresh;
+    Game_Actor.prototype.refresh = function() {
+        this.syncFormationRowStates();
+        _Game_Actor_refresh.call(this);
+    };
+
+    // Row states are permanent while placed; skip their turn/battle-end expiry.
+    const _Game_Actor_removeState = Game_Actor.prototype.removeState;
+    Game_Actor.prototype.removeState = function(stateId) {
+        if (stateId && stateId === this.formationRowStateId()) return;
+        _Game_Actor_removeState.call(this, stateId);
     };
 
     //-------------------------------------------------------------------
@@ -105,31 +261,42 @@
         SceneManager.push(Scene_PartyFormation);
     };
 
-    //-------------------------------------------------------------------
-    // Formation captions (non-selectable header windows)
-    //-------------------------------------------------------------------
-    class Window_FormationCaption extends Window_Base {
-        initialize(rect, text) {
-            super.initialize(rect);
-            this._text = text;
-            this.refresh();
-        }
-        setText(text) {
-            if (this._text === text) return;
-            this._text = text;
-            this.refresh();
-        }
-        refresh() {
-            this.contents.clear();
-            this.drawText(this._text, 0, 0, this.innerWidth, "center");
-        }
-    }
+    const slotTag = actor => {
+        const slot = $gameParty.slotIndexOfActor(actor);
+        if (slot < 0) return reserveTag;
+        return `${slot < FRONT_SLOTS ? frontTag : backTag}${(slot % FRONT_SLOTS) + 1}`;
+    };
+
+    // drawFace only crops, so scale the portrait to fit small cells.
+    const drawScaledFace = (win, actor, x, y, size) => {
+        const bitmap = ImageManager.loadFace(actor.faceName());
+        const pw = ImageManager.faceWidth;
+        const ph = ImageManager.faceHeight;
+        const sx = (actor.faceIndex() % 4) * pw;
+        const sy = Math.floor(actor.faceIndex() / 4) * ph;
+        win.contents.blt(bitmap, sx, sy, pw, ph, x, y, size, size);
+    };
+
+    // Row text sized to the row (MainFontLetterSpacing ignores canvas maxWidth,
+    // so shrink the font explicitly instead of relying on squeeze).
+    const drawRowText = (win, text, x, y, width, height, align) => {
+        const contents = win.contents;
+        const original = contents.fontSize;
+        let size = Math.min($gameSystem.mainFontSize(), Math.max(14, height - 8));
+        contents.fontSize = size;
+        const measured = contents.measureTextWidth(text);
+        if (measured > width) size = Math.max(12, Math.floor(size * width / measured));
+        contents.fontSize = size;
+        contents.drawText(text, x, y, width, height, align || "left");
+        contents.fontSize = original;
+    };
 
     //-------------------------------------------------------------------
-    // Formation member lists (front / back / reserve)
+    // Roster window (left) - every party member, tagged with their slot
     //-------------------------------------------------------------------
-    class Window_FormationMemberList extends Window_Selectable {
-        initialize(rect) {
+    class Window_FormationRoster extends Window_Selectable {
+        initialize(rect, rowHeight) {
+            this._rowHeight = rowHeight || 56;
             super.initialize(rect);
             this._list = [];
             this._onBoundary = null;
@@ -146,50 +313,128 @@
         maxItems() {
             return this._list.length;
         }
-        item(index) {
-            return this._list[index !== undefined ? index : this.index()];
-        }
         maxCols() {
             return 1;
         }
+        itemHeight() {
+            return this._rowHeight;
+        }
+        item(index) {
+            return this._list[index !== undefined ? index : this.index()];
+        }
+        selectActor(actor) {
+            const index = this._list.indexOf(actor);
+            if (index >= 0) this.select(index);
+        }
         cursorDown(wrap) {
-            if (this.index() < this.maxItems() - 1) {
-                super.cursorDown(false);
-            } else if (this._onBoundary) {
-                this._onBoundary("down");
-            }
+            if (this.index() < this.maxItems() - 1) super.cursorDown(false);
         }
         cursorUp(wrap) {
-            if (this.index() > 0) {
-                super.cursorUp(false);
-            } else if (this._onBoundary) {
-                this._onBoundary("up");
-            }
+            if (this.index() > 0) super.cursorUp(false);
         }
         cursorRight(wrap) {
             if (this._onBoundary) this._onBoundary("right");
         }
-        cursorLeft(wrap) {
-            if (this._onBoundary) this._onBoundary("left");
-        }
-        isCurrentItemEnabled() {
-            return !!this.item();
-        }
+        cursorLeft(wrap) {}
         drawItem(index) {
             const actor = this.item(index);
             if (!actor) return;
-            const rect = this.itemLineRect(index);
-            this.changePaintOpacity(this.isCurrentItemEnabled());
-            const lvWidth = 60;
-            const hpWidth = 140;
-            const nameWidth = Math.max(60, rect.width - lvWidth - hpWidth);
+            const rect = this.itemRectWithPadding(index);
+            const faceSize = rect.height - 4;
+            const tagWidth = Math.max(40, Math.floor(rect.height * 1.2));
+            const textX = rect.x + faceSize + 8;
+            const textWidth = rect.width - faceSize - 8 - tagWidth;
+            this.changePaintOpacity($gameParty.slotIndexOfActor(actor) >= 0);
+            drawScaledFace(this, actor, rect.x, rect.y + 2, faceSize);
             this.resetTextColor();
-            this.drawText(actor.name(), rect.x, rect.y, nameWidth);
-            this.drawText(`Lv${actor.level}`, rect.x + nameWidth, rect.y, lvWidth);
-            this.changeTextColor(ColorManager.hpColor(actor));
-            this.drawText(`${actor.hp}/${actor.mhp}`, rect.x + nameWidth + lvWidth, rect.y, hpWidth, "right");
+            drawRowText(this, actor.name(), textX, rect.y, textWidth, rect.height);
+            this.changeTextColor(ColorManager.systemColor());
+            drawRowText(this, slotTag(actor), rect.x + rect.width - tagWidth, rect.y, tagWidth, rect.height, "right");
             this.resetTextColor();
             this.changePaintOpacity(true);
+        }
+    }
+
+    //-------------------------------------------------------------------
+    // Grid window (right) - front3/back3 cells with a group label column
+    //-------------------------------------------------------------------
+    class Window_FormationGrid extends Window_Selectable {
+        initialize(rect, rowHeight) {
+            this._rowHeight = rowHeight || 56;
+            super.initialize(rect);
+            this._onBoundary = null;
+            this.refresh();
+        }
+        setOnBoundary(handler) {
+            this._onBoundary = handler;
+        }
+        maxItems() {
+            return TOTAL_SLOTS;
+        }
+        maxCols() {
+            return 1;
+        }
+        itemHeight() {
+            return this._rowHeight;
+        }
+        labelWidth() {
+            return 80;
+        }
+        groupGap() {
+            return 16;
+        }
+        fittingBoardHeight() {
+            return this.itemHeight() * TOTAL_SLOTS + this.groupGap() + this.padding * 2;
+        }
+        overallHeight() {
+            return super.overallHeight() + this.groupGap();
+        }
+        itemRect(index) {
+            const rect = super.itemRect(index);
+            rect.x += this.labelWidth();
+            rect.width -= this.labelWidth();
+            if (index >= FRONT_SLOTS) rect.y += this.groupGap();
+            return rect;
+        }
+        cursorDown(wrap) {
+            if (this.index() < this.maxItems() - 1) super.cursorDown(false);
+        }
+        cursorUp(wrap) {
+            if (this.index() > 0) super.cursorUp(false);
+        }
+        cursorRight(wrap) {}
+        cursorLeft(wrap) {
+            if (this._onBoundary) this._onBoundary("left");
+        }
+        drawItem(index) {
+            const rect = this.itemRectWithPadding(index);
+            const actor = $gameParty.actorInSlot(index);
+            if (actor) {
+                const faceSize = rect.height - 4;
+                drawScaledFace(this, actor, rect.x, rect.y + 2, faceSize);
+                this.resetTextColor();
+                drawRowText(this, actor.name(), rect.x + faceSize + 8, rect.y, rect.width - faceSize - 8, rect.height);
+            } else {
+                this.changeTextColor(ColorManager.textColor(8));
+                drawRowText(this, emptySlotText, rect.x, rect.y, rect.width, rect.height, "center");
+                this.resetTextColor();
+            }
+        }
+        paint() {
+            super.paint();
+            if (!this.contents) return;
+            this.drawGroupLabel(frontLabel, 0, FRONT_SLOTS - 1);
+            this.drawGroupLabel(backLabel, FRONT_SLOTS, TOTAL_SLOTS - 1);
+        }
+        drawGroupLabel(text, firstIndex, lastIndex) {
+            const top = this.itemRect(firstIndex).y;
+            const last = this.itemRect(lastIndex);
+            const bottom = last.y + last.height;
+            const height = Math.min(44, bottom - top);
+            const y = top + Math.floor((bottom - top - height) / 2);
+            this.changeTextColor(ColorManager.systemColor());
+            drawRowText(this, text, 0, y, this.labelWidth() - 8, height, "center");
+            this.resetTextColor();
         }
     }
 
@@ -204,246 +449,697 @@
 
     Scene_PartyFormation.prototype.initialize = function() {
         Scene_MenuBase.prototype.initialize.call(this);
-        this._pendingReserveActor = null;
+        this._pendingActor = null;
     };
 
     Scene_PartyFormation.prototype.create = function() {
         Scene_MenuBase.prototype.create.call(this);
         this.createHelpWindow();
-        this.createFrontWindows();
-        this.createBackWindows();
-        this.createReserveWindows();
+        this.createRosterWindow();
+        this.createGridWindow();
+        this.wireBoundaries();
         this.refreshAll();
-        const firstWindow = this._frontWindow.maxItems() > 0 ? this._frontWindow : this._backWindow;
-        this.activateFormationWindow(firstWindow);
+        this._rosterWindow.select(0);
+        this.activateFormationWindow(this._rosterWindow);
     };
 
-    Scene_PartyFormation.prototype.helpAreaRect = function() {
-        const wx = 0;
-        const wy = this.mainAreaTop();
-        const ww = Graphics.boxWidth;
-        const wh = this.calcWindowHeight(2, false);
-        return new Rectangle(wx, wy, ww, wh);
+    Scene_PartyFormation.prototype.rosterWindowRect = function() {
+        const ww = Math.floor(Graphics.boxWidth * 0.42);
+        return new Rectangle(0, this.mainAreaTop(), ww, this.mainAreaHeight());
     };
 
-    Scene_PartyFormation.prototype.labelHeight = function() {
-        return this.calcWindowHeight(1, false);
+    Scene_PartyFormation.prototype.gridWindowRect = function() {
+        const roster = this.rosterWindowRect();
+        const wx = roster.width;
+        return new Rectangle(wx, this.mainAreaTop(), Graphics.boxWidth - wx, this.mainAreaHeight());
     };
 
-    Scene_PartyFormation.prototype.activeListHeight = function() {
-        return this.calcWindowHeight(this.constructor.visibleActiveRows(), true);
+    Scene_PartyFormation.prototype.createRosterWindow = function() {
+        this._rosterWindow = new Window_FormationRoster(this.rosterWindowRect());
+        this._rosterWindow.setHandler("ok", this.onRosterOk.bind(this));
+        this._rosterWindow.setHandler("cancel", this.onRosterCancel.bind(this));
+        this.addWindow(this._rosterWindow);
     };
 
-    Scene_PartyFormation.visibleActiveRows = function() {
-        return Math.min(5, maxBattleMembers);
-    };
-
-    Scene_PartyFormation.prototype.createHelpWindow = function() {
-        this._helpWindow = new Window_Help(this.helpAreaRect());
-        this.addWindow(this._helpWindow);
-    };
-
-    Scene_PartyFormation.prototype.createFrontWindows = function() {
-        const help = this.helpAreaRect();
-        const labelH = this.labelHeight();
-        const listH = this.activeListHeight();
-        const ww = Math.floor(Graphics.boxWidth / 2);
-        const wx = 0;
-        const labelRect = new Rectangle(wx, help.y + help.height, ww, labelH);
-        const listRect = new Rectangle(wx, labelRect.y + labelH, ww, listH);
-        this._frontLabelWindow = new Window_FormationCaption(labelRect, frontLabel);
-        this._frontWindow = new Window_FormationMemberList(listRect);
-        this._frontWindow.setHandler("ok", this.onActiveOk.bind(this, this._frontWindow));
-        this._frontWindow.setHandler("cancel", this.onActiveCancel.bind(this, this._frontWindow));
-        this.addWindow(this._frontLabelWindow);
-        this.addWindow(this._frontWindow);
-    };
-
-    Scene_PartyFormation.prototype.createBackWindows = function() {
-        const help = this.helpAreaRect();
-        const labelH = this.labelHeight();
-        const listH = this.activeListHeight();
-        const wx = Math.floor(Graphics.boxWidth / 2);
-        const ww = Graphics.boxWidth - wx;
-        const labelRect = new Rectangle(wx, help.y + help.height, ww, labelH);
-        const listRect = new Rectangle(wx, labelRect.y + labelH, ww, listH);
-        this._backLabelWindow = new Window_FormationCaption(labelRect, backLabel);
-        this._backWindow = new Window_FormationMemberList(listRect);
-        this._backWindow.setHandler("ok", this.onActiveOk.bind(this, this._backWindow));
-        this._backWindow.setHandler("cancel", this.onActiveCancel.bind(this, this._backWindow));
-        this.addWindow(this._backLabelWindow);
-        this.addWindow(this._backWindow);
-    };
-
-    Scene_PartyFormation.prototype.createReserveWindows = function() {
-        const help = this.helpAreaRect();
-        const labelH = this.labelHeight();
-        const top = help.y + help.height + labelH + this.activeListHeight();
-        const listH = Math.max(this.calcWindowHeight(1, true), this.mainAreaBottom() - top - labelH);
-        const wx = 0;
-        const ww = Graphics.boxWidth;
-        const labelRect = new Rectangle(wx, top, ww, labelH);
-        const listRect = new Rectangle(wx, top + labelH, ww, listH);
-        this._reserveLabelWindow = new Window_FormationCaption(labelRect, reserveLabel);
-        this._reserveWindow = new Window_FormationMemberList(listRect);
-        this._reserveWindow.setHandler("ok", this.onReserveOk.bind(this));
-        this._reserveWindow.setHandler("cancel", this.onReserveCancel.bind(this));
-        this.addWindow(this._reserveLabelWindow);
-        this.addWindow(this._reserveWindow);
+    Scene_PartyFormation.prototype.createGridWindow = function() {
+        const rect = this.gridWindowRect();
+        const grid = new Window_FormationGrid(rect);
+        // Shrink to the six cells so the grid reads as a fixed formation board.
+        const fitted = Math.min(rect.height, grid.fittingBoardHeight());
+        if (fitted !== rect.height) {
+            grid.move(rect.x, rect.y, rect.width, fitted);
+            grid.createContents();
+            grid.refresh();
+        }
+        grid.setHandler("ok", this.onGridOk.bind(this));
+        grid.setHandler("cancel", this.onGridCancel.bind(this));
+        this.addWindow(grid);
+        this._gridWindow = grid;
     };
 
     Scene_PartyFormation.prototype.wireBoundaries = function() {
-        this._frontWindow.setOnBoundary(dir => this.onFrontBoundary(dir));
-        this._backWindow.setOnBoundary(dir => this.onBackBoundary(dir));
-        this._reserveWindow.setOnBoundary(dir => this.onReserveBoundary(dir));
-    };
-
-    Scene_PartyFormation.prototype.onFrontBoundary = function(dir) {
-        if (dir === "right") this.activateFormationWindow(this._backWindow);
-        else if (dir === "down") this.activateFormationWindow(this._reserveWindow);
-    };
-
-    Scene_PartyFormation.prototype.onBackBoundary = function(dir) {
-        if (dir === "left") this.activateFormationWindow(this._frontWindow);
-        else if (dir === "down") this.activateFormationWindow(this._reserveWindow);
-    };
-
-    Scene_PartyFormation.prototype.onReserveBoundary = function(dir) {
-        if (dir === "up") {
-            const target = this._frontWindow.maxItems() > 0 ? this._frontWindow : this._backWindow;
-            this.activateFormationWindow(target);
-        }
+        this._rosterWindow.setOnBoundary(dir => {
+            if (dir === "right") this.pickUpAndOpenGrid();
+        });
+        this._gridWindow.setOnBoundary(dir => {
+            if (dir === "left") this.cancelPending();
+        });
     };
 
     Scene_PartyFormation.prototype.activateFormationWindow = function(win) {
-        if (!win || win.maxItems() === 0) return;
-        for (const w of [this._frontWindow, this._backWindow, this._reserveWindow]) {
-            w.deactivate();
-        }
-        win.select(Math.max(0, Math.min(win.index(), win.maxItems() - 1)));
+        this._rosterWindow.deactivate();
+        this._gridWindow.deactivate();
+        if (win === this._rosterWindow) this._gridWindow.deselect();
         win.activate();
     };
 
     Scene_PartyFormation.prototype.refreshAll = function() {
-        this._frontWindow.setList($gameParty.formationFrontMembers());
-        this._backWindow.setList($gameParty.formationBackMembers());
-        this._reserveWindow.setList($gameParty.formationReserveMembers());
-        this._reserveLabelWindow.setText(`${reserveLabel} (${$gameParty.formationReserveMembers().length})`);
-        this.wireBoundaries();
+        this._rosterWindow.setList($gameParty.allMembers());
+        this._gridWindow.refresh();
         this.updateHelpText();
     };
 
     Scene_PartyFormation.prototype.updateHelpText = function() {
-        if (this._pendingReserveActor) {
+        if (this._pendingActor) {
             this._helpWindow.setText(
-                `${this._pendingReserveActor.name()} と交代するメンバーを前衛/後衛から選択してください。キャンセルで中止します。`
+                `${this._pendingActor.name()} を置くマスを選択\n${frontLabel}には最低1人必要です`
             );
         } else {
             this._helpWindow.setText(
-                `${frontLabel}/${backLabel}のメンバーはOKで前衛⇔後衛を切り替えられます（${frontLabel}には最低1人必要）。控えを選ぶと入れ替えできます。`
+                `メンバーを選び、${frontLabel}/${backLabel}のマスへ配置\nキャンセルで戻る`
             );
         }
     };
 
-    Scene_PartyFormation.prototype.onActiveOk = function(win) {
-        const actor = win.item();
-        if (!actor) {
-            win.activate();
-            return;
-        }
-        if (this._pendingReserveActor) {
-            this.completeSwap(actor, this._pendingReserveActor, win);
-        } else {
-            this.toggleRow(actor, win);
-        }
-    };
-
-    Scene_PartyFormation.prototype.toggleRow = function(actor, win) {
-        const movingToBack = actor.isFrontRow();
-        if (movingToBack && $gameParty.formationFrontMembers().length <= 1) {
-            SoundManager.playBuzzer();
-            win.activate();
-            return;
-        }
-        actor.setFormationRow(movingToBack ? "back" : "front");
-        SoundManager.playEquip();
-        const stillActiveWindow = movingToBack ? this._backWindow : this._frontWindow;
-        this.refreshAll();
-        this.activateFormationWindow(stillActiveWindow);
-    };
-
-    Scene_PartyFormation.prototype.onActiveCancel = function(win) {
-        if (this._pendingReserveActor) {
-            this._pendingReserveActor = null;
-            this.updateHelpText();
-            this.activateFormationWindow(this._reserveWindow);
-        } else {
-            SoundManager.playCancel();
-            this.popScene();
-        }
-    };
-
-    Scene_PartyFormation.prototype.onReserveOk = function() {
-        const actor = this._reserveWindow.item();
-        if (!actor) {
-            this._reserveWindow.activate();
-            return;
-        }
-        this._pendingReserveActor = actor;
+    Scene_PartyFormation.prototype.pickUpAndOpenGrid = function() {
+        const actor = this._rosterWindow.item();
+        if (!actor) return;
+        this._pendingActor = actor;
         this.updateHelpText();
-        const target = this._frontWindow.maxItems() > 0 ? this._frontWindow : this._backWindow;
-        this.activateFormationWindow(target);
+        const slot = $gameParty.slotIndexOfActor(actor);
+        this._gridWindow.select(slot >= 0 ? slot : 0);
+        this.activateFormationWindow(this._gridWindow);
     };
 
-    Scene_PartyFormation.prototype.onReserveCancel = function() {
-        SoundManager.playCancel();
+    Scene_PartyFormation.prototype.onRosterOk = function() {
+        this.pickUpAndOpenGrid();
+        if (!this._pendingActor) this._rosterWindow.activate();
+    };
+
+    Scene_PartyFormation.prototype.onRosterCancel = function() {
         this.popScene();
     };
 
-    Scene_PartyFormation.prototype.completeSwap = function(activeActor, reserveActor, win) {
-        const members = $gameParty.allMembers();
-        const activeIndex = members.indexOf(activeActor);
-        const reserveIndex = members.indexOf(reserveActor);
-        if (activeIndex < 0 || reserveIndex < 0) {
-            this._pendingReserveActor = null;
-            SoundManager.playBuzzer();
-            this.updateHelpText();
-            win.activate();
+    Scene_PartyFormation.prototype.cancelPending = function() {
+        this._pendingActor = null;
+        this.updateHelpText();
+        this.activateFormationWindow(this._rosterWindow);
+    };
+
+    Scene_PartyFormation.prototype.onGridOk = function() {
+        const actor = this._pendingActor;
+        if (!actor) {
+            this._gridWindow.activate();
             return;
         }
-        const row = activeActor.formationRow();
-        $gameParty.swapOrder(activeIndex, reserveIndex);
-        reserveActor.setFormationRow(row);
-        this._pendingReserveActor = null;
+        const ok = $gameParty.assignFormationSlot(actor, this._gridWindow.index());
+        if (!ok) {
+            SoundManager.playBuzzer();
+            this._gridWindow.activate();
+            return;
+        }
         SoundManager.playEquip();
+        this._pendingActor = null;
         this.refreshAll();
-        this.activateFormationWindow(row === "front" ? this._frontWindow : this._backWindow);
+        this._rosterWindow.selectActor(actor);
+        this.activateFormationWindow(this._rosterWindow);
+    };
+
+    Scene_PartyFormation.prototype.onGridCancel = function() {
+        this.cancelPending();
     };
 
     //-------------------------------------------------------------------
-    // Battle actor window - front/back tag display
+    // Menu party list - compact cards (2 columns when wide) with slot tags
     //-------------------------------------------------------------------
+    const isMenuStatusGrid = win => !(win instanceof Window_MenuActor);
+    const menuFaceGap = 10;
+    const gaugeStep = 128 + 8;
+
+    const _Window_MenuStatus_maxCols = Window_MenuStatus.prototype.maxCols;
+    Window_MenuStatus.prototype.maxCols = function() {
+        if (!isMenuStatusGrid(this)) return _Window_MenuStatus_maxCols.call(this);
+        return this.innerWidth >= 640 ? 2 : 1;
+    };
+
+    const _Window_MenuStatus_numVisibleRows = Window_MenuStatus.prototype.numVisibleRows;
+    Window_MenuStatus.prototype.numVisibleRows = function() {
+        if (!isMenuStatusGrid(this)) return _Window_MenuStatus_numVisibleRows.call(this);
+        const shown = Math.min(Math.max($gameParty.size(), 1), TOTAL_SLOTS);
+        return Math.max(1, Math.ceil(shown / this.maxCols()));
+    };
+
+    const _Window_MenuStatus_itemHeight = Window_MenuStatus.prototype.itemHeight;
+    Window_MenuStatus.prototype.itemHeight = function() {
+        if (!isMenuStatusGrid(this)) return _Window_MenuStatus_itemHeight.call(this);
+        const gaugeCount = $dataSystem.optDisplayTp ? 3 : 2;
+        const candidate = Math.floor(this.innerHeight / this.numVisibleRows());
+        const cellWidth = Math.floor(this.innerWidth / this.maxCols()) - this.colSpacing() - this.itemPadding() * 2;
+        const textWidth = cellWidth - Math.min(ImageManager.faceHeight, candidate - 8) - menuFaceGap;
+        const gaugeRows = textWidth >= gaugeStep * gaugeCount - 8 ? 1 : gaugeCount;
+        const minHeight = this.lineHeight() + this.gaugeLineHeight() * gaugeRows + 8;
+        return Math.max(minHeight, candidate);
+    };
+
+    Window_MenuStatus.prototype.menuFaceSize = function(rect) {
+        return Math.min(ImageManager.faceHeight, rect.height - 8);
+    };
+
+    const _Window_MenuStatus_drawItemImage = Window_MenuStatus.prototype.drawItemImage;
+    Window_MenuStatus.prototype.drawItemImage = function(index) {
+        if (!isMenuStatusGrid(this)) return _Window_MenuStatus_drawItemImage.call(this, index);
+        const actor = this.actor(index);
+        const rect = this.itemRectWithPadding(index);
+        const size = this.menuFaceSize(rect);
+        this.changePaintOpacity($gameParty.slotIndexOfActor(actor) >= 0);
+        drawScaledFace(this, actor, rect.x, rect.y + Math.floor((rect.height - size) / 2), size);
+        this.changePaintOpacity(true);
+    };
+
+    const _Window_MenuStatus_drawItemStatus = Window_MenuStatus.prototype.drawItemStatus;
+    Window_MenuStatus.prototype.drawItemStatus = function(index) {
+        if (!isMenuStatusGrid(this)) return _Window_MenuStatus_drawItemStatus.call(this, index);
+        const actor = this.actor(index);
+        const rect = this.itemRectWithPadding(index);
+        const size = this.menuFaceSize(rect);
+        const x = rect.x + size + menuFaceGap;
+        const width = rect.width - size - menuFaceGap;
+        const lineH = this.lineHeight();
+        const gaugeH = this.gaugeLineHeight();
+        const types = $dataSystem.optDisplayTp ? ["hp", "mp", "tp"] : ["hp", "mp"];
+        const sideBySide = width >= gaugeStep * types.length - 8;
+        const gaugeRows = sideBySide ? 1 : types.length;
+        const threeLines = rect.height >= lineH * 2 + gaugeH * gaugeRows + 8;
+        const blockH = (threeLines ? lineH * 2 : lineH) + gaugeH * gaugeRows;
+        let y = rect.y + Math.floor((rect.height - blockH) / 2);
+        const tagWidth = 56;
+        const lvWidth = 72;
+        this.drawActorName(actor, x, y, width - tagWidth - lvWidth);
+        this.drawCompactLevel(actor, x + width - tagWidth - lvWidth, y);
+        this.changeTextColor(ColorManager.systemColor());
+        this.drawText(slotTag(actor), x + width - tagWidth, y, tagWidth, "right");
+        this.resetTextColor();
+        y += lineH;
+        if (threeLines) {
+            this.drawActorClass(actor, x, y, width);
+            y += lineH;
+        }
+        let gx = x;
+        for (const type of types) {
+            this.placeGauge(actor, type, gx, y);
+            if (sideBySide) gx += gaugeStep;
+            else y += gaugeH;
+        }
+    };
+
+    Window_MenuStatus.prototype.drawCompactLevel = function(actor, x, y) {
+        this.changeTextColor(ColorManager.systemColor());
+        this.drawText(TextManager.levelA, x, y, 32);
+        this.resetTextColor();
+        this.drawText(actor.level, x + 32, y, 40, "right");
+    };
+
+    // DestinationExternalData pins this instance's rows to a full face height;
+    // the compact cards need the prototype value again.
+    const _Scene_Menu_create = Scene_Menu.prototype.create;
+    Scene_Menu.prototype.create = function() {
+        _Scene_Menu_create.call(this);
+        const status = this._statusWindow;
+        if (status && Object.prototype.hasOwnProperty.call(status, "itemHeight")) {
+            delete status.itemHeight;
+            status.createContents();
+            status.refresh();
+        }
+    };
+
+    //-------------------------------------------------------------------
+    // Battle status window - taller status area for face + gauges + chips
+    //-------------------------------------------------------------------
+    Scene_Battle.prototype.formationStatusHeight = function() {
+        return 180;
+    };
+
+    const _Scene_Battle_statusWindowRect = Scene_Battle.prototype.statusWindowRect;
+    Scene_Battle.prototype.formationStatusDelta = function() {
+        return this.formationStatusHeight() - _Scene_Battle_statusWindowRect.call(this).height;
+    };
+    Scene_Battle.prototype.statusWindowRect = function() {
+        const rect = _Scene_Battle_statusWindowRect.call(this);
+        const delta = this.formationStatusDelta();
+        rect.y -= delta;
+        rect.height += delta;
+        return rect;
+    };
+    const _Scene_Battle_helpWindowRect = Scene_Battle.prototype.helpWindowRect;
+    Scene_Battle.prototype.helpWindowRect = function() {
+        const rect = _Scene_Battle_helpWindowRect.call(this);
+        rect.y -= this.formationStatusDelta();
+        return rect;
+    };
+    const _Scene_Battle_skillWindowRect = Scene_Battle.prototype.skillWindowRect;
+    Scene_Battle.prototype.skillWindowRect = function() {
+        const rect = _Scene_Battle_skillWindowRect.call(this);
+        rect.height = Math.max(1, rect.height - this.formationStatusDelta());
+        return rect;
+    };
+    // FlexibleTopDownUI re-applies hardcoded heights after create; follow it.
+    const _Scene_Battle_relayout = Scene_Battle.prototype.relayoutBattleWindows;
+    if (_Scene_Battle_relayout) {
+        Scene_Battle.prototype.relayoutBattleWindows = function() {
+            _Scene_Battle_relayout.call(this);
+            const status = this.statusWindowRect();
+            const help = this.helpWindowRect();
+            for (const [win, rect] of [[this._statusWindow, status], [this._helpWindow, help]]) {
+                if (!win) continue;
+                const resized = win.height !== rect.height || win.width !== rect.width;
+                win.move(rect.x, rect.y, rect.width, rect.height);
+                if (resized) {
+                    win.createContents();
+                    win.refresh();
+                }
+            }
+        };
+    }
+
     Window_BattleStatus.prototype.maxCols = function() {
-        return Math.max(1, Math.min(maxBattleMembers, $gameParty.battleMembers().length));
+        return FRONT_SLOTS;
     };
 
-    const _Window_BattleStatus_drawItemStatus = Window_BattleStatus.prototype.drawItemStatus;
-    Window_BattleStatus.prototype.drawItemStatus = function(index) {
-        _Window_BattleStatus_drawItemStatus.call(this, index);
-        this.drawFormationRowTag(index);
+    Window_BattleStatus.prototype.itemRect = function(index) {
+        const actor = this.actor(index);
+        const front = $gameParty.formationFrontMembers();
+        const back = $gameParty.formationBackMembers();
+        const inFront = actor && front.includes(actor);
+        const rowMembers = inFront ? front : back;
+        const row = inFront ? 0 : 1;
+        const col = actor ? Math.max(0, rowMembers.indexOf(actor)) : 0;
+        const cellW = Math.floor(this.innerWidth / Math.max(1, rowMembers.length));
+        const cellH = Math.floor(this.innerHeight / 2);
+        const colSpacing = this.colSpacing();
+        const rowSpacing = this.rowSpacing();
+        const x = col * cellW + colSpacing / 2 - this.scrollBaseX();
+        const y = row * cellH + rowSpacing / 2 - this.scrollBaseY();
+        return new Rectangle(x, y, cellW - colSpacing, cellH - rowSpacing);
     };
 
-    Window_BattleStatus.prototype.drawFormationRowTag = function(index) {
+    // Compact gauge: caller-defined width, fixed small fonts so a 36px main
+    // font does not spill over the 20px gauge line.
+    class Sprite_FormationGauge extends Sprite_Gauge {
+        setupWidth(width) {
+            if (this._formationWidth === width) return;
+            this._formationWidth = width;
+            this.bitmap.destroy();
+            this.createBitmap();
+            this._battler && this.redraw();
+        }
+        bitmapWidth() { return this._formationWidth || 128; }
+        bitmapHeight() { return 22; }
+        textHeight() { return 20; }
+        gaugeHeight() { return 8; }
+        labelY() { return 0; }
+        labelFontSize() { return 14; }
+        valueFontSize() { return 16; }
+        labelOutlineWidth() { return 2; }
+        valueOutlineWidth() { return 2; }
+        gaugeX() { return this.measureLabelWidth() + 4; }
+    }
+
+    // Ring gauge with the value in the middle (used for TP).
+    class Sprite_RingGauge extends Sprite_FormationGauge {
+        bitmapHeight() { return this.bitmapWidth(); }
+        labelFontSize() { return 10; }
+        valueFontSize() { return 16; }
+        ringWidth() { return 5; }
+        drawGauge() {
+            const size = this.bitmapWidth();
+            const ctx = this.bitmap.context;
+            const cx = size / 2;
+            const cy = size / 2;
+            const r = size / 2 - this.ringWidth() / 2 - 1;
+            ctx.save();
+            ctx.lineWidth = this.ringWidth();
+            ctx.lineCap = "round";
+            ctx.strokeStyle = this.gaugeBackColor();
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.stroke();
+            const rate = this.gaugeRate();
+            if (rate > 0) {
+                const grad = ctx.createLinearGradient(0, 0, size, size);
+                grad.addColorStop(0, this.gaugeColor1());
+                grad.addColorStop(1, this.gaugeColor2());
+                ctx.strokeStyle = grad;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * rate);
+                ctx.stroke();
+            }
+            ctx.restore();
+            this.bitmap._baseTexture.update();
+        }
+        drawLabel() {
+            const size = this.bitmapWidth();
+            this.setupLabelFont();
+            this.bitmap.paintOpacity = this.labelOpacity();
+            this.bitmap.drawText(this.label(), 0, Math.floor(size * 0.18), size, 12, "center");
+            this.bitmap.paintOpacity = 255;
+        }
+        drawValue() {
+            const size = this.bitmapWidth();
+            this.setupValueFont();
+            this.bitmap.drawText(this.currentValue(), 0, Math.floor(size * 0.42), size, 20, "center");
+        }
+    }
+
+    // Two-character state names in small boxes instead of icons. Redraws only
+    // when the affected state list changes.
+    class Sprite_StateChips extends Sprite {
+        initialize() {
+            super.initialize();
+            this._battler = null;
+            this._key = null;
+            this._chipWidth = 0;
+            this.bitmap = new Bitmap(1, 1);
+        }
+        setup(battler, width) {
+            if (this._chipWidth !== width) {
+                this._chipWidth = width;
+                this.bitmap.destroy();
+                this.bitmap = new Bitmap(Math.max(1, width), 18);
+                this._key = null;
+            }
+            this._battler = battler;
+        }
+        update() {
+            super.update();
+            if (!this._battler) return;
+            const states = this._battler.states().filter(s => s.iconIndex > 0);
+            const key = states.map(s => s.id).join(",");
+            if (key !== this._key) {
+                this._key = key;
+                this.redraw(states);
+            }
+        }
+        redraw(states) {
+            const bitmap = this.bitmap;
+            bitmap.clear();
+            bitmap.fontFace = "sans-serif";
+            bitmap.fontSize = 11;
+            bitmap.outlineWidth = 0;
+            bitmap.textColor = "#ffffff";
+            const chipW = 26;
+            const gap = 2;
+            let x = 0;
+            for (const state of states) {
+                if (x + chipW > bitmap.width) break;
+                bitmap.fillRect(x, 1, chipW, 16, "rgba(0, 0, 0, 0.55)");
+                bitmap.fillRect(x, 1, chipW, 1, "rgba(255, 255, 255, 0.35)");
+                bitmap.drawText(state.name.slice(0, 2), x, 1, chipW, 16, "center");
+                x += chipW + gap;
+            }
+        }
+    }
+
+    Window_BattleStatus.prototype.placeFormationGauge = function(actor, type, x, y, width, spriteClass) {
+        const key = "formation-gauge-%1-%2".format(actor.actorId(), type);
+        const sprite = this.createInnerSprite(key, spriteClass || Sprite_FormationGauge);
+        sprite.setupWidth(width);
+        sprite.setup(actor, type);
+        sprite.move(x, y);
+        sprite.show();
+    };
+
+    Window_BattleStatus.prototype.placeStateChips = function(actor, x, y, width) {
+        const key = "formation-chips-%1".format(actor.actorId());
+        const sprite = this.createInnerSprite(key, Sprite_StateChips);
+        sprite.setup(actor, width);
+        sprite.move(x, y);
+        sprite.show();
+    };
+
+    Window_BattleStatus.prototype.formationCellLayout = function(rect) {
+        const gap = 6;
+        const faceSize = Math.min(64, rect.height - 2);
+        const ringSize = Math.min(56, rect.height - 2);
+        const middleX = rect.x + faceSize + gap;
+        const middleW = rect.width - faceSize - ringSize - gap * 2;
+        return { gap, faceSize, ringSize, middleX, middleW, ringX: rect.x + rect.width - ringSize };
+    };
+
+    Window_BattleStatus.prototype.drawItemImage = function(index) {
         const actor = this.actor(index);
         if (!actor) return;
         const rect = this.itemRectWithPadding(index);
-        const text = actor.isFrontRow() ? frontTag : backTag;
-        const color = actor.isFrontRow() ? ColorManager.textColor(24) : ColorManager.textColor(6);
+        const layout = this.formationCellLayout(rect);
+        this.changePaintOpacity(actor.isAlive());
+        drawScaledFace(this, actor, rect.x, rect.y + 1, layout.faceSize);
+        this.changePaintOpacity(true);
+    };
+
+    Window_BattleStatus.prototype.drawItemStatus = function(index) {
+        const actor = this.actor(index);
+        if (!actor) return;
+        const rect = this.itemRectWithPadding(index);
+        const layout = this.formationCellLayout(rect);
+        const isFront = $gameParty.formationFrontMembers().includes(actor);
+        const nameH = 18;
+        const gaugeH = 20;
+        const x = layout.middleX;
+        const width = layout.middleW;
+        let y = rect.y;
+        const tagWidth = 20;
+        this.drawFormationRowTag(isFront, x, y, tagWidth, nameH);
+        this.drawBattleName(actor, x + tagWidth + 2, y, width - tagWidth - 2, nameH);
+        y += nameH + 1;
+        this.placeFormationGauge(actor, "hp", x, y, width);
+        y += gaugeH + 1;
+        this.placeFormationGauge(actor, "mp", x, y, width);
+        y += gaugeH + 2;
+        this.placeStateChips(actor, x, y, rect.x + rect.width - x);
+        this.placeFormationGauge(actor, "tp", layout.ringX, rect.y, layout.ringSize, Sprite_RingGauge);
+    };
+
+    Window_BattleStatus.prototype.drawBattleName = function(actor, x, y, width, height) {
         const fontSize = this.contents.fontSize;
-        this.contents.fontSize = Math.max(12, fontSize - 6);
-        this.changeTextColor(color);
-        this.drawText(text, rect.x, rect.y, 32, "left");
+        const base = 16;
+        this.contents.fontSize = base;
+        const measured = this.textWidth(actor.name());
+        if (measured > width) {
+            this.contents.fontSize = Math.max(11, Math.floor(base * width / measured));
+        }
+        this.changeTextColor(ColorManager.hpColor(actor));
+        this.contents.drawText(actor.name(), x, y, width, height, "left");
         this.contents.fontSize = fontSize;
         this.resetTextColor();
+    };
+
+    Window_BattleStatus.prototype.drawFormationRowTag = function(isFront, x, y, width, height) {
+        const fontSize = this.contents.fontSize;
+        this.contents.fontSize = 13;
+        this.changeTextColor(isFront ? ColorManager.textColor(24) : ColorManager.textColor(6));
+        this.contents.drawText(isFront ? frontTag : backTag, x, y, width, height, "center");
+        this.contents.fontSize = fontSize;
+        this.resetTextColor();
+    };
+
+    //-------------------------------------------------------------------
+    // In-battle formation: "隊列" actor command, consumes the actor's turn
+    //-------------------------------------------------------------------
+    const _Window_ActorCommand_makeCommandList = Window_ActorCommand.prototype.makeCommandList;
+    Window_ActorCommand.prototype.makeCommandList = function() {
+        _Window_ActorCommand_makeCommandList.call(this);
+        if (!this._actor) return;
+        const layer = this._battleCommandLayer;
+        if (layer !== undefined && layer !== "root") return;
+        const enabled = $gameSystem.isFormationEnabled();
+        // BattleCommandHierarchy's reserve swap is superseded by full formation.
+        const swap = this._list.find(c => c.symbol === "swap");
+        if (swap) {
+            swap.name = "隊列";
+            swap.symbol = "formation";
+            swap.enabled = enabled;
+        } else {
+            this.addCommand("隊列", "formation", enabled);
+        }
+    };
+
+    const _Scene_Battle_createActorCommandWindow = Scene_Battle.prototype.createActorCommandWindow;
+    Scene_Battle.prototype.createActorCommandWindow = function() {
+        _Scene_Battle_createActorCommandWindow.call(this);
+        this._actorCommandWindow.setHandler("formation", this.commandBattleFormation.bind(this));
+    };
+
+    const _Scene_Battle_createAllWindows = Scene_Battle.prototype.createAllWindows;
+    Scene_Battle.prototype.createAllWindows = function() {
+        _Scene_Battle_createAllWindows.call(this);
+        this.createBattleFormationWindows();
+    };
+
+    Scene_Battle.prototype.createBattleFormationWindows = function() {
+        const top = this.skillWindowRect().y;
+        const bottom = this.statusWindowRect().y;
+        const available = bottom - top;
+        // Fit all six cells (plus the group gap and padding) in the free area.
+        const rowH = Math.max(28, Math.min(44, Math.floor((available - 16 - 24) / TOTAL_SLOTS)));
+        const height = Math.min(available, rowH * TOTAL_SLOTS + 16 + 24);
+        const rosterW = Math.floor(Graphics.boxWidth * 0.42);
+        const roster = new Window_FormationRoster(new Rectangle(0, top, rosterW, height), rowH);
+        const grid = new Window_FormationGrid(new Rectangle(rosterW, top, Graphics.boxWidth - rosterW, height), rowH);
+        roster.setHandler("ok", this.onBattleFormationRosterOk.bind(this));
+        roster.setHandler("cancel", this.onBattleFormationRosterCancel.bind(this));
+        roster.setOnBoundary(dir => { if (dir === "right") this.onBattleFormationRosterOk(); });
+        grid.setHandler("ok", this.onBattleFormationGridOk.bind(this));
+        grid.setHandler("cancel", this.onBattleFormationGridCancel.bind(this));
+        grid.setOnBoundary(dir => { if (dir === "left") this.onBattleFormationGridCancel(); });
+        for (const win of [roster, grid]) {
+            win.hide();
+            win.deactivate();
+            this.addWindow(win);
+        }
+        this._battleFormationRoster = roster;
+        this._battleFormationGrid = grid;
+        this._battleFormationPending = null;
+        this._battleFormationBefore = null;
+    };
+
+    Scene_Battle.prototype.commandBattleFormation = function() {
+        this._actorCommandWindow.deactivate();
+        this._battleFormationBefore = $gameParty.formationSlots().slice();
+        this._battleFormationPending = null;
+        this._battleFormationRoster.setList($gameParty.allMembers());
+        this._battleFormationRoster.selectActor(BattleManager.actor());
+        if (this._battleFormationRoster.index() < 0) this._battleFormationRoster.select(0);
+        this._battleFormationGrid.deselect();
+        this._battleFormationGrid.refresh();
+        this._battleFormationRoster.show();
+        this._battleFormationGrid.show();
+        this._battleFormationRoster.activate();
+    };
+
+    Scene_Battle.prototype.onBattleFormationRosterOk = function() {
+        const actor = this._battleFormationRoster.item();
+        if (!actor) {
+            this._battleFormationRoster.activate();
+            return;
+        }
+        this._battleFormationPending = actor;
+        const slot = $gameParty.slotIndexOfActor(actor);
+        this._battleFormationRoster.deactivate();
+        this._battleFormationGrid.select(slot >= 0 ? slot : 0);
+        this._battleFormationGrid.activate();
+    };
+
+    Scene_Battle.prototype.onBattleFormationGridCancel = function() {
+        this._battleFormationPending = null;
+        this._battleFormationGrid.deactivate();
+        this._battleFormationGrid.deselect();
+        this._battleFormationRoster.activate();
+    };
+
+    Scene_Battle.prototype.onBattleFormationGridOk = function() {
+        const actor = this._battleFormationPending;
+        if (!actor || !$gameParty.assignFormationSlot(actor, this._battleFormationGrid.index())) {
+            SoundManager.playBuzzer();
+            this._battleFormationGrid.activate();
+            return;
+        }
+        SoundManager.playEquip();
+        this._battleFormationPending = null;
+        this._battleFormationRoster.setList($gameParty.allMembers());
+        this._battleFormationRoster.selectActor(actor);
+        this._battleFormationGrid.refresh();
+        this._battleFormationGrid.deselect();
+        this._battleFormationGrid.deactivate();
+        this._battleFormationRoster.activate();
+    };
+
+    Scene_Battle.prototype.hideBattleFormationWindows = function() {
+        for (const win of [this._battleFormationRoster, this._battleFormationGrid]) {
+            if (!win) continue;
+            win.hide();
+            win.deactivate();
+        }
+        this._battleFormationPending = null;
+    };
+
+    Scene_Battle.prototype.onBattleFormationRosterCancel = function() {
+        const before = this._battleFormationBefore || [];
+        const after = $gameParty.formationSlots();
+        const changed = before.some((id, i) => id !== after[i]);
+        this.hideBattleFormationWindows();
+        if (!changed) {
+            if (this._actorCommandWindow.setBattleCommandLayer) {
+                this._actorCommandWindow.setBattleCommandLayer("root", "formation");
+            } else {
+                this._actorCommandWindow.activate();
+            }
+            return;
+        }
+        this.consumeTurnForFormation(before, after);
+    };
+
+    // Same reset the reserve swap uses: moved actors and the commanding actor
+    // lose their pending actions and TPB charge; HP/MP/TP/states are kept.
+    Scene_Battle.prototype.consumeTurnForFormation = function(before, after) {
+        const acting = BattleManager.actor();
+        const previousIndex = acting ? $gameParty.battleMembers().indexOf(acting) : 0;
+        const movedIds = new Set();
+        before.forEach((id, i) => {
+            if (id !== after[i]) {
+                if (id) movedIds.add(id);
+                if (after[i]) movedIds.add(after[i]);
+            }
+        });
+        const affected = [...movedIds].map(id => $gameActors.actor(id)).filter(a => a);
+        if (acting && !affected.includes(acting)) affected.push(acting);
+        for (const actor of affected) {
+            actor.clearActions();
+            actor.clearTpbChargeTime();
+            actor._tpbCastTime = 0;
+            actor._tpbIdleTime = 0;
+            actor._tpbTurnEnd = false;
+            actor.setActionState("undecided");
+            actor.deselect();
+        }
+        BattleManager._actionBattlers = BattleManager._actionBattlers.filter(b => !affected.includes(b));
+        BattleManager._currentActor = null;
+        BattleManager._inputting = false;
+        $gameParty.requestMotionRefresh();
+        $gameTemp.requestBattleRefresh();
+        this._statusWindow.refresh();
+        if (!BattleManager.isTpb()) {
+            const members = $gameParty.battleMembers();
+            let index = acting ? members.indexOf(acting) : -1;
+            if (index < 0) index = Math.min(previousIndex, members.length - 1);
+            BattleManager._currentActor = members[Math.max(0, index)] || null;
+            BattleManager._inputting = true;
+            BattleManager.selectNextCommand();
+        }
+        this.changeInputWindow();
+    };
+
+    const _Scene_Battle_isAnyInputWindowActive = Scene_Battle.prototype.isAnyInputWindowActive;
+    Scene_Battle.prototype.isAnyInputWindowActive = function() {
+        return _Scene_Battle_isAnyInputWindowActive.call(this) ||
+            !!this._battleFormationRoster?.active || !!this._battleFormationGrid?.active;
+    };
+    const _Scene_Battle_hideSubInputWindows = Scene_Battle.prototype.hideSubInputWindows;
+    Scene_Battle.prototype.hideSubInputWindows = function() {
+        _Scene_Battle_hideSubInputWindows.call(this);
+        this.hideBattleFormationWindows();
+    };
+    const _Scene_Battle_isTimeActive = Scene_Battle.prototype.isTimeActive;
+    Scene_Battle.prototype.isTimeActive = function() {
+        return !this._battleFormationRoster?.active && !this._battleFormationGrid?.active &&
+            _Scene_Battle_isTimeActive.call(this);
     };
 })();
