@@ -707,7 +707,7 @@
     // Battle status window - taller status area for face + gauges + chips
     //-------------------------------------------------------------------
     Scene_Battle.prototype.formationStatusHeight = function() {
-        return 180;
+        return 150;
     };
 
     const _Scene_Battle_statusWindowRect = Scene_Battle.prototype.statusWindowRect;
@@ -764,11 +764,12 @@
         const rowMembers = inFront ? front : back;
         const row = inFront ? 0 : 1;
         const col = actor ? Math.max(0, rowMembers.indexOf(actor)) : 0;
-        const cellW = Math.floor(this.innerWidth / Math.max(1, rowMembers.length));
+        const cellW = Math.floor(this.innerWidth / FRONT_SLOTS);
+        const blockW = cellW * Math.min(FRONT_SLOTS, rowMembers.length);
         const cellH = Math.floor(this.innerHeight / 2);
         const colSpacing = this.colSpacing();
         const rowSpacing = this.rowSpacing();
-        const x = col * cellW + colSpacing / 2 - this.scrollBaseX();
+        const x = Math.floor((this.innerWidth - blockW) / 2) + col * cellW + colSpacing / 2 - this.scrollBaseX();
         const y = row * cellH + rowSpacing / 2 - this.scrollBaseY();
         return new Rectangle(x, y, cellW - colSpacing, cellH - rowSpacing);
     };
@@ -909,8 +910,8 @@
 
     Window_BattleStatus.prototype.formationCellLayout = function(rect) {
         const gap = 6;
-        const faceSize = Math.min(64, rect.height - 2);
-        const ringSize = Math.min(56, rect.height - 2);
+        const faceSize = Math.min(52, rect.height - 2);
+        const ringSize = Math.min(46, rect.height - 2);
         const middleX = rect.x + faceSize + gap;
         const middleW = rect.width - faceSize - ringSize - gap * 2;
         return { gap, faceSize, ringSize, middleX, middleW, ringX: rect.x + rect.width - ringSize };
@@ -932,8 +933,8 @@
         const rect = this.itemRectWithPadding(index);
         const layout = this.formationCellLayout(rect);
         const isFront = $gameParty.formationFrontMembers().includes(actor);
-        const nameH = 18;
-        const gaugeH = 20;
+        const nameH = 16;
+        const gaugeH = 16;
         const x = layout.middleX;
         const width = layout.middleW;
         let y = rect.y;

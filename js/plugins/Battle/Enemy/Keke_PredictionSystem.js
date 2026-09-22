@@ -881,15 +881,15 @@
     const keke_actShowCastActor = toBoolean(parameters["行動-詠唱中の味方も表示"]);
     const keke_actShowAutoActor = toBoolean(parameters["行動-自動中の味方も表示"]);
     const keke_actFontFace = parameters["行動-フォント"];
-    const keke_actFontSize = Number(parameters["行動-文字サイズ"]);
+    const keke_actFontSize = Math.max(1, Number(parameters["行動-文字サイズ"]) - 4);
     const keke_actFontColor = "rgba(" + parameters["行動-文字色"] + ")";
     const keke_actFontColorCast = "rgba(" + parameters["行動-文字色(詠唱中)"] + ")";
     const keke_actOutW = Number(parameters["行動-縁取り幅"]);
-    const keke_actW = Number(parameters["行動-横幅"]);
+    const keke_actW = Math.max(1, Number(parameters["行動-横幅"]) - 40);
     const keke_actBackColor = parameters["行動-背景色"] ? `rgba(${parameters["行動-背景色"]})` : "";
     const keke_actShowIcon = toBoolean(parameters["行動-アイコン表示"]);
     const keke_actIconSpace = Number(parameters["…アイコン間隔"]);
-    const keke_actIconSize = Number(parameters["…アイコンサイズ"]) || 100;
+    const keke_actIconSize = Math.max(1, (Number(parameters["…アイコンサイズ"]) || 100) - 15);
     const keke_actLineSpace = Number(parameters["行動-行間"]);
     const keke_actPosActor = strToHash(parameters["行動-表示位置/味方"]);
     const keke_actPosEnemy = strToHash(parameters["行動-表示位置/敵"]);
@@ -1776,6 +1776,13 @@
         // 共通の位置
         sprite.x += (pos["ずらしX"] || 0) + (sprite._iconXKe || 0) + sprite._memoXKe + sprite._centerXKe;
         sprite.y += (pos["ずらしY"] || 0) + sprite._memoYKe + sprite._centerYKe;
+        const gauge = battler._enemyId && battlerSprite._battlerHp;
+        if (gauge && gauge.bitmap && sprite.parent && sprite.parent.toLocal) {
+            const center = gauge.toGlobal(new PIXI.Point(0, 0));
+            const local = sprite.parent.toLocal(center);
+            sprite.x = local.x - sprite._width / 2;
+            sprite.y = local.y - gauge.bitmap.height - sprite._height - 4;
+        }
         // 鋼体ビューがあるなら上にずらす
         /*if (existSteelView(battlerSprite, dire)) {
             sprite.y -= battlerSprite._steelSpriteKe._heightKe || 0;

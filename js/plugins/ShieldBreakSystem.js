@@ -325,6 +325,20 @@
         updatePosition() {
             const source = this._enemySprite;
             const enemy = this._enemy;
+            const gauge = source._battlerHp;
+            if (gauge && gauge.bitmap) {
+                const center = gauge.toGlobal(new PIXI.Point(0, 0));
+                const local = this.parent.toLocal(center);
+                const origin = this.parent.toLocal(new PIXI.Point(0, 0));
+                const edge = this.parent.toLocal(new PIXI.Point(Graphics.width, Graphics.height));
+                this.x = Math.round(Math.max(origin.x + 4, Math.min(
+                    local.x - this.bitmap.width / 2,
+                    edge.x - this.bitmap.width - 4)));
+                this.y = Math.round(Math.max(origin.y + 4, Math.min(
+                    local.y + defaults.gap,
+                    edge.y - this.bitmap.height - 4)));
+                return;
+            }
             const top = source.toGlobal(new PIXI.Point(0, -source.bitmap.height * source.anchor.y));
             // Leave the standard state icon unobstructed, including its top-edge clamp.
             if (enemy.allIcons().length && source._stateIconSprite) {
@@ -361,7 +375,7 @@
                 });
             }
             // Flow layout: pills wrap to the right of the shield, Octopath style.
-            const chipH = 26, gap = 4, flowX = 52, maxFlow = 220;
+            const chipH = 22, gap = 3, flowX = 44, maxFlow = 180;
             const rows = [[]];
             let rowW = 0;
             for (const chip of chips) {
@@ -393,14 +407,14 @@
             const context = bitmap.context;
 
             // Original vector shield; no external artwork or icon dependency.
-            const shieldY = Math.floor((height - 44) / 2);
+            const shieldY = Math.floor((height - 36) / 2);
             context.save();
             context.beginPath();
             context.moveTo(4, shieldY + 4);
-            context.lineTo(40, shieldY + 4);
-            context.lineTo(38, shieldY + 28);
-            context.lineTo(22, shieldY + 42);
-            context.lineTo(6, shieldY + 28);
+            context.lineTo(34, shieldY + 4);
+            context.lineTo(32, shieldY + 24);
+            context.lineTo(19, shieldY + 34);
+            context.lineTo(6, shieldY + 24);
             context.closePath();
             context.fillStyle = broken ? "rgba(96, 30, 24, 0.92)" : "rgba(20, 38, 66, 0.92)";
             context.fill();
@@ -408,10 +422,10 @@
             context.lineWidth = 2;
             context.stroke();
             context.restore();
-            bitmap.fontSize = 20;
+            bitmap.fontSize = 16;
             bitmap.fontBold = true;
             bitmap.textColor = "#ffffff";
-            bitmap.drawText(String(enemy.shieldPoints()), 2, shieldY + 4, 40, 30, "center");
+            bitmap.drawText(String(enemy.shieldPoints()), 2, shieldY + 3, 36, 26, "center");
             bitmap.fontBold = false;
 
             const flowTop = Math.floor((height - flowH) / 2);
@@ -435,7 +449,7 @@
                 context.lineWidth = 1.5;
                 context.stroke();
                 context.restore();
-                bitmap.fontSize = 13;
+                bitmap.fontSize = 11;
                 bitmap.fontBold = chip.style === "break";
                 bitmap.textColor = { break: "#2a1410", element: "#fff1ca",
                     weapon: "#e6f4ff", unknown: "#98a3b8" }[chip.style];
