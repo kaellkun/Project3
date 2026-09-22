@@ -46,7 +46,6 @@
         makeCommandList() {
             this.addCommand("魔物の肉を使う", "meat", this.meatCount() > 0);
             this.addCommand("使わずに休憩する", "rest");
-            this.addCommand("焚き火休憩の説明", "help");
             this.addCommand("やめる", "cancel");
         }
 
@@ -95,7 +94,7 @@
         create() {
             super.create();
             this.createHelpWindow();
-            this._helpWindow.setText("焚き火休憩では、魔物の肉1個につき全員のHPを最大HPの25%回復できます。休憩を終えると、肉を使わなくても全員のMPが全回復します。");
+            this._helpWindow.setText("焚き火休憩では、魔物の肉1個につき全員のHPを\n最大HPの25%回復できます。\n休憩を終えると、肉を使わなくても全員のMPが全回復します。");
             this.createMainWindow();
             this.createItemWindow();
             this.createQuantityWindow();
@@ -105,7 +104,7 @@
 
         mainWindowRect() {
             const ww = Math.min(520, Graphics.boxWidth - 48);
-            const wh = this.calcWindowHeight(4, true);
+            const wh = this.calcWindowHeight(3, true);
             return new Rectangle((Graphics.boxWidth - ww) / 2, this._helpWindow.height + 24, ww, wh);
         }
 
@@ -113,7 +112,6 @@
             this._mainWindow = new Window_CampRestCommand(this.mainWindowRect());
             this._mainWindow.setHandler("meat", this.onMeat.bind(this));
             this._mainWindow.setHandler("rest", this.onRest.bind(this));
-            this._mainWindow.setHandler("help", this.onHelp.bind(this));
             this._mainWindow.setHandler("cancel", this.popScene.bind(this));
             this.addWindow(this._mainWindow);
         }
@@ -210,14 +208,9 @@
             this.finishRest("焚き火で休憩しました。全員のMPが全回復しました。");
         }
 
-        onHelp() {
-            this._helpWindow.setText("肉を使う数が多いほどHPが回復します。肉を使わない場合でも、休憩を終えると全員のMPが最大まで回復します。");
-            this._mainWindow.activate();
-        }
-
         finishRest(message) {
             for (const actor of $gameParty.members()) {
-                actor.setMp(actor.mmp());
+                actor.setMp(actor.mmp);
                 actor.refresh();
             }
             $gameMessage.add(message);

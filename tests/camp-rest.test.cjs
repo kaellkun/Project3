@@ -25,5 +25,24 @@ test("CampRest contains tagged meat support, quantity confirmation, and MP recov
     assert.match(pluginSource, /<CampRestMeat>/);
     assert.match(pluginSource, /この数量で使う/);
     assert.match(pluginSource, /actor\.gainHp\(Math\.floor\(actor\.mhp \* hpRecoveryRate \* count\)\)/);
-    assert.match(pluginSource, /actor\.setMp\(actor\.mmp\(\)\)/);
+    assert.match(pluginSource, /actor\.setMp\(actor\.mmp\)/);
+    assert.doesNotMatch(pluginSource, /\.mmp\(\)/);
+});
+
+test("CampRest finishRest restores MP through the mmp getter without throwing", () => {
+    const source = pluginSource.match(/finishRest\(message\) \{([\s\S]*?)\n        \}/)[1];
+    const actor = {
+        _mp: 0,
+        get mmp() { return 42; },
+        setMp(value) { this._mp = value; },
+        refresh() {},
+    };
+    const context = {
+        $gameParty: { members: () => [actor] },
+        $gameMessage: { add() {} },
+        SceneManager: { pop() {} },
+        message: "",
+    };
+    vm.runInNewContext(source, context);
+    assert.equal(actor._mp, 42);
 });

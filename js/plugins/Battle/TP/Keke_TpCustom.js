@@ -728,12 +728,28 @@
         // TPチャージ1回だけ(連撃時にTPチャージを1回だけにする)
         if (this.subject()._tpChargeOnlyOnceKe) { return; }
 
-        _Game_Action_applyItemUserEffect.apply(this);
+        const item = this.item();
+        const tpGain = item.tpGain;
+        item.tpGain = 0;
+        _Game_Action_applyItemUserEffect.apply(this, arguments);
+        item.tpGain = tpGain;
 
         // TPチャージ1回だけフラグをオン
         if (keke_tpChargeOnlyOnce) {
             this.subject()._tpChargeOnlyOnceKe = true;
         }
+    };
+
+    const _Game_Action_applyForTpGain = Game_Action.prototype.apply;
+    Game_Action.prototype.apply = function(target) {
+        if (!this._tpGainAppliedKe) {
+            const tpGain = this.item().tpGain;
+            if (tpGain) {
+                this.subject().gainSilentTp(tpGain);
+            }
+            this._tpGainAppliedKe = true;
+        }
+        _Game_Action_applyForTpGain.apply(this, arguments);
     };
 
     //- ゲームバトラー/全アクション終了時の処理(処理追加)
