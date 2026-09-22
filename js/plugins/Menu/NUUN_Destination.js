@@ -63,13 +63,19 @@ var Imported = Imported || {};
 Imported.NUUN_Destination = true;
 
 (() => {
-    const parameters = PluginManager.parameters('NUUN_Destination');
+    const pluginName = 'NUUN_Destination';
+    const fullName = 'Menu/NUUN_Destination';
+    const parameters = {
+        ...PluginManager.parameters(pluginName),
+        ...PluginManager.parameters(fullName),
+    };
     const DestinationList = (NUUN_Base_Ver >= 113 ? (DataManager.nuun_structureData(parameters['DestinationList'])) : null) || [];
-    
-    const pluginName = "NUUN_Destination";
-    PluginManager.registerCommand(pluginName, 'SetDestination', args => {
+
+    const setDestination = args => {
         $gameSystem.setDestinationId(Number(args.id));
-    });
+    };
+    PluginManager.registerCommand(pluginName, 'SetDestination', setDestination);
+    PluginManager.registerCommand(fullName, 'SetDestination', setDestination);
 
     Window_Base.prototype.getDestinationList = function() {
         const data = DestinationList[$gameSystem.getDestinationId() - 1];
@@ -89,4 +95,4 @@ Imported.NUUN_Destination = true;
         return data ? data.DestinationText : null;
     };
 
-})();
+})();

@@ -1046,7 +1046,7 @@
         this._battleFormationBefore = $gameParty.formationSlots().slice();
         this._battleFormationActor = BattleManager.actor();
         this._battleFormationPending = null;
-        const targets = $gameParty.battleMembers().filter(actor => actor !== this._battleFormationActor);
+        const targets = $gameParty.battleMembers();
         this._battleFormationRoster.setList(targets);
         this._battleFormationRoster.select(0);
         this._battleFormationGrid.deselect();
@@ -1080,9 +1080,10 @@
         const actor = this._battleFormationActor;
         const target = this._battleFormationPending;
         const targetSlot = target ? $gameParty.slotIndexOfActor(target) : -1;
-        if (!actor || !target || actor === target || targetSlot < 0 ||
-            this._battleFormationGrid.index() !== targetSlot ||
-            !$gameParty.assignFormationSlot(actor, targetSlot)) {
+        const destinationSlot = target === actor ? this._battleFormationGrid.index() : targetSlot;
+        if (!actor || !target || targetSlot < 0 ||
+            (target !== actor && this._battleFormationGrid.index() !== targetSlot) ||
+            !$gameParty.assignFormationSlot(actor, destinationSlot)) {
             SoundManager.playBuzzer();
             this._battleFormationGrid.activate();
             return;
@@ -1090,7 +1091,7 @@
         SoundManager.playEquip();
         this._battleFormationPending = null;
         this._battleFormationGrid.refresh();
-        this.consumeTurnForFormation(this._battleFormationBefore, $gameParty.formationSlots());
+        this.finishBattleFormation();
     };
 
     Scene_Battle.prototype.hideBattleFormationWindows = function() {
@@ -1116,47 +1117,18 @@
             }
             return;
         }
-        this.consumeTurnForFormation(before, after);
+        this.finishBattleFormation();
     };
 
-    // Same reset the reserve swap uses: moved actors and the commanding actor
-    // lose their pending actions and TPB charge; HP/MP/TP/states are kept.
-    Scene_Battle.prototype.consumeTurnForFormation = function(before, after) {
-        const acting = BattleManager.actor();
-        const previousIndex = acting ? $gameParty.battleMembers().indexOf(acting) : 0;
-        const movedIds = new Set();
-        before.forEach((id, i) => {
-            if (id !== after[i]) {
-                if (id) movedIds.add(id);
-                if (after[i]) movedIds.add(after[i]);
-            }
-        });
-        const affected = [...movedIds].map(id => $gameActors.actor(id)).filter(a => a);
-        if (acting && !affected.includes(acting)) affected.push(acting);
-        for (const actor of affected) {
-            actor.clearActions();
-            actor.clearTpbChargeTime();
-            actor._tpbCastTime = 0;
-            actor._tpbIdleTime = 0;
-            actor._tpbTurnEnd = false;
-            actor.setActionState("undecided");
-            actor.deselect();
+    // Formation changes are a menu operation and do not consume the actor's
+    // current action or TPB charge.
+    Scene_Battle.prototype.finishBattleFormation = function() {
+        this.hideBattleFormationWindows();
+        if (this._actorCommandWindow.setBattleCommandLayer) {
+            this._actorCommandWindow.setBattleCommandLayer("root", "formation");
+        } else {
+            this._actorCommandWindow.activate();
         }
-        BattleManager._actionBattlers = BattleManager._actionBattlers.filter(b => !affected.includes(b));
-        BattleManager._currentActor = null;
-        BattleManager._inputting = false;
-        $gameParty.requestMotionRefresh();
-        $gameTemp.requestBattleRefresh();
-        this._statusWindow.refresh();
-        if (!BattleManager.isTpb()) {
-            const members = $gameParty.battleMembers();
-            let index = acting ? members.indexOf(acting) : -1;
-            if (index < 0) index = Math.min(previousIndex, members.length - 1);
-            BattleManager._currentActor = members[Math.max(0, index)] || null;
-            BattleManager._inputting = true;
-            BattleManager.selectNextCommand();
-        }
-        this.changeInputWindow();
     };
 
     const _Scene_Battle_isAnyInputWindowActive = Scene_Battle.prototype.isAnyInputWindowActive;

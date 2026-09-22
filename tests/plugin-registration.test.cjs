@@ -180,6 +180,11 @@ test('only the Battle slip implementation is enabled', () => {
     }
 });
 
+test('Keke_TpCustom charges damage TP only once per action', () => {
+    const { parameters } = registered(loadPlugins(), 'Battle/TP/Keke_TpCustom');
+    assert.equal(parameters['TPチャージ1回だけ'], 'true');
+});
+
 test('BattleEquipCommand is enabled and ChangeEquipOnBattleMZ is not registered', () => {
     const plugins = loadPlugins();
     assert.equal(registered(plugins, 'BattleEquipCommand').status, true);

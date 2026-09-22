@@ -5617,7 +5617,7 @@ Game_Party.prototype.numItems = function(item) {
 };
 
 Game_Party.prototype.maxItems = function(/*item*/) {
-    return 99;
+    return 9999;
 };
 
 Game_Party.prototype.hasMaxItems = function(item) {
