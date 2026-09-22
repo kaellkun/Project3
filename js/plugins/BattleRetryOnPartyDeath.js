@@ -57,7 +57,7 @@
     class Window_BattleRetryCommand extends Window_Command {
         makeCommandList() {
             this.addCommand("リトライ", "retry");
-            this.addCommand("ゲームオーバー", "gameover");
+            this.addCommand("タイトルに戻る", "gameover");
         }
     }
 
@@ -65,6 +65,7 @@
     Scene_Gameover.prototype.create = function() {
         _Scene_Gameover_create.apply(this, arguments);
         if (retryState.contents) {
+            this.createWindowLayer();
             const width = 360;
             const height = this.calcWindowHeight(2, true);
             const rect = new Rectangle(

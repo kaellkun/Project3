@@ -190,6 +190,10 @@
         return Math.min(columns, this._list ? Math.max(1, this._list.length) : 4);
     };
 
+    Window_MenuCommand.prototype.maxPageRows = function() {
+        return this.maxRows();
+    };
+
     Window_ShopCommand.prototype.maxCols = function() {
         return 3;
     };
@@ -285,7 +289,8 @@
     //-----------------------------------------------------------------------------
     Scene_Menu.prototype.commandWindowRect = function() {
         const ww = Graphics.boxWidth;
-        const wh = this.calcCommandWindowHeight(this._commandWindow?.maxRows() || 1);
+        const rows = this._commandWindow?.maxRows() || 1;
+        const wh = this.calcCommandWindowHeight(rows);
         const wx = 0;
         const wy = 0;
         return new Rectangle(wx, wy, ww, wh);

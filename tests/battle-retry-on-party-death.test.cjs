@@ -68,6 +68,7 @@ function setup() {
     };
     context.Window_Command.prototype.constructor = Window_Command;
     context.Scene_Gameover.prototype.calcWindowHeight = () => 120;
+    context.Scene_Gameover.prototype.createWindowLayer = function() {};
     context.Scene_Gameover.prototype.addWindow = function(window) {
         this.window = window;
     };
