@@ -488,11 +488,8 @@ Scene_Battle.prototype.createActorCommandWindow = function () {
 };
 
 Scene_Battle.prototype.createBattleStateInfoWindow = function() {
-    const rect = this.battleStateInfoWindowRect();
-    const stateWindow = new Window_BattleStateInfo(rect);
-    stateWindow.setHandler("cancel", this.closeStateInfoWindow.bind(this));
-    this.addWindow(stateWindow);
-    this._windowBattleStateInfo = stateWindow;
+    // Status inspection is handled by the shared Scene_Status screen.
+    this._windowBattleStateInfo = { active: false };
 };
 
 Scene_Battle.prototype.battleStateInfoWindowRect = function() {
@@ -512,16 +509,7 @@ Scene_Battle.prototype.calcStateWindowHeight = function() {
 };
 
 Scene_Battle.prototype.closeStateInfoWindow = function() {
-    this._windowBattleStateInfo.hideGaugeSprite();
-    this._windowBattleStateInfo.close();
-    this._windowBattleStateInfo._stateListWindow.hide();
-    this._windowBattleStateInfo.deactivate();
-    if(this._stateInfoWindowWithActorCommand) {
-        this._actorCommandWindow.activate();
-        this._stateInfoWindowWithActorCommand = false;
-    } else {
-        this._partyCommandWindow.activate();
-    }
+    SceneManager.pop();
 };
 
 Scene_Battle.prototype.partyCommandStateInfo = function() {
@@ -534,11 +522,9 @@ Scene_Battle.prototype.actorCommandStateInfo = function() {
 };
 
 Scene_Battle.prototype.openStateInfoWindow = function() {
-    this._windowBattleStateInfo._stateListWindow.smoothSelect(0);
-    this._windowBattleStateInfo._stateListWindow.show();
-    this._windowBattleStateInfo.open();
-    this._windowBattleStateInfo.activate();
-    this._windowBattleStateInfo.refresh();
+    const actor = BattleManager.actor() || $gameParty.menuActor();
+    if (actor) $gameParty.setMenuActor(actor);
+    SceneManager.push(Scene_Status);
 };
 
 const _Scene_Battle_prototype_isAnyInputWindowActive = Scene_Battle.prototype.isAnyInputWindowActive;

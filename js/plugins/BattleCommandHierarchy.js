@@ -63,8 +63,8 @@
             }
             case "situation":
                 this.addCommand("味方ステータス", "allyStatus", !!Scene_Battle.prototype.actorCommandStateInfo);
-                this.addCommand("敵ステータス", "enemyStatus",
-                    !!Scene_Battle.prototype.actorCommandStateInfo && $gameTroop.aliveMembers().length > 0);
+                // The shared status screen displays party actors only.
+                this.addCommand("敵ステータス", "enemyStatus", false);
                 this.addCommand("バトルログ", "pastLog", !!Scene_Battle.prototype.commandPastLog);
                 this.addCommand("戻る", "commandBack");
                 break;
@@ -235,23 +235,12 @@
         };
     }
 
-    // Keep the existing state viewer, including descriptions and gauges, but
-    // constrain its member list per entry point. The keyboard shortcut remains
-    // an all-battler viewer and returns to whichever actor menu opened it.
+    // Keep the old hooks available for command compatibility. The actual
+    // status display is now provided by the shared Scene_Status screen.
     const createInfo = Scene_Battle.prototype.createBattleStateInfoWindow;
     if (createInfo) {
         Scene_Battle.prototype.createBattleStateInfoWindow = function() {
             createInfo.call(this);
-            const win = this._windowBattleStateInfo;
-            const makeList = win.makeCommandList;
-            win.makeCommandList = function() {
-                makeList.call(this);
-                if (this._hierarchySide) {
-                    this._list = this._list.filter(b => this._hierarchySide === "ally" ? b.isActor() : b.isEnemy());
-                    this._index = Math.max(0, Math.min(this._index, this._list.length - 1));
-                    this._stateListWindow.setBattler(this.battler(this._index));
-                }
-            };
         };
         const infoRect = Scene_Battle.prototype.battleStateInfoWindowRect;
         Scene_Battle.prototype.battleStateInfoWindowRect = function() {
@@ -263,17 +252,9 @@
             rect.y = top;
             return rect;
         };
-        const closeInfo = Scene_Battle.prototype.closeStateInfoWindow;
-        Scene_Battle.prototype.closeStateInfoWindow = function() {
-            this._stateInfoWindowWithActorCommand = true;
-            closeInfo.call(this);
-            this._windowBattleStateInfo._hierarchySide = null;
-        };
     }
     Scene_Battle.prototype.commandHierarchyStatus = function(side) {
-        const win = this._windowBattleStateInfo;
-        win._hierarchySide = side;
-        win.select(0);
+        if (side !== "ally") return;
         this._actorCommandWindow.deactivate();
         this.actorCommandStateInfo();
     };
