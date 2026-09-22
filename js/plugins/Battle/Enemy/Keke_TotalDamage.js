@@ -563,10 +563,12 @@
         if (!scene || !scene._spriteset) return null;
         const sprites = battler._enemyId ? scene._spriteset._enemySprites : scene._spriteset._actorSprites;
         if (!sprites) return null;
+        const sameBattler = sprites.find(sprite => sprite._battler === battler);
+        if (sameBattler) return sameBattler;
         for (const sprite of sprites) {
             if (!sprite._battler) continue;
             if ((battler._actorId && sprite._battler._actorId === battler._actorId) || 
-                (battler._enemyId && sprite._battler.index() === battler.index())) {
+                (battler._enemyId && sprite._battler.index && sprite._battler.index() === battler.index())) {
                 return sprite;
             }
         }
@@ -574,8 +576,74 @@
     }
 
     //--------------------------------------------------
-    // フォントサイズ取得（Keke_StatePopup方式）
+    // フロントビュー味方用アンカー（ステータスウィンドウのセル中央に追従）
     //--------------------------------------------------
+    function actorCellCenter(actor) {
+        const scene = SceneManager._scene;
+        const statusWindow = scene && scene._statusWindow;
+        if (!statusWindow || !statusWindow.itemRect) return null;
+        const index = $gameParty.battleMembers().indexOf(actor);
+        if (index < 0) return null;
+        const rect = statusWindow.itemRect(index);
+        const padding = statusWindow.padding || 0;
+        const point = new Point(
+            statusWindow.x + padding + rect.x + rect.width / 2,
+            statusWindow.y + padding + rect.y + rect.height / 2
+        );
+        // battleField sits 24px above the window layer; popups on it need converted coordinates.
+        const layer = keke_layer === "ウインドウ下" && scene._spriteset ? scene._spriteset._battleField : scene._windowLayer;
+        if (!layer || layer === scene._windowLayer || !scene._windowLayer) return point;
+        return layer.toLocal(point, scene._windowLayer);
+    }
+
+    function SpriteActorCellAnchorKeTtdm() { this.initialize(...arguments); }
+    SpriteActorCellAnchorKeTtdm.prototype = Object.create(Sprite.prototype);
+    SpriteActorCellAnchorKeTtdm.prototype.constructor = SpriteActorCellAnchorKeTtdm;
+    SpriteActorCellAnchorKeTtdm.prototype.initialize = function(actor) {
+        Sprite.prototype.initialize.call(this);
+        this._battler = actor;
+        this._actor = actor;
+        this._homeX = 0;
+        this._homeY = 0;
+        this._offsetX = 0;
+        // Cancels the -32 feet-to-head lift so popups land on the cell center.
+        this._offsetY = 32;
+        this._kekeIndivDamageSprites = [];
+        this.syncCell();
+    };
+    SpriteActorCellAnchorKeTtdm.prototype.syncCell = function() {
+        const center = actorCellCenter(this._battler);
+        if (!center) return;
+        this._homeX = center.x;
+        this._homeY = center.y;
+    };
+    SpriteActorCellAnchorKeTtdm.prototype.update = function() {
+        Sprite.prototype.update.call(this);
+        this.syncCell();
+        updateIndividualDamageSprites(this);
+        updateTotalDamage(this, false);
+    };
+
+    // Front view creates no Sprite_Actor; give each ally a stand-in that lives on the status cell.
+    function actorCellAnchor(battler) {
+        const scene = SceneManager._scene;
+        const spriteset = scene && scene._spriteset;
+        if (!battler || !battler._actorId || !spriteset || !spriteset._battleField) return null;
+        if (!spriteset._actorCellAnchorsKe) spriteset._actorCellAnchorsKe = new Map();
+        let anchor = spriteset._actorCellAnchorsKe.get(battler._actorId);
+        if (!anchor) {
+            anchor = new SpriteActorCellAnchorKeTtdm(battler);
+            spriteset._battleField.addChild(anchor);
+            spriteset._actorCellAnchorsKe.set(battler._actorId, anchor);
+        }
+        anchor._battler = battler;
+        anchor.syncCell();
+        return anchor;
+    }
+
+    function findPopupBody(battler) {
+        return searchSpriteBattler(battler) || actorCellAnchor(battler);
+    }
     function getFontSize(size) {
         const mainSize = keke_fontSize || $gameSystem.mainFontSize();
         if (!size && size !== 0) { return mainSize; }
@@ -827,7 +895,7 @@
             // 重複防止チェック
             if (result._individualPopupShownKe) return;
             
-            const battlerSprite = searchSpriteBattler(this);
+            const battlerSprite = findPopupBody(this);
             const isSlip = result._isSlipDamageKe || false;
             
             if (battlerSprite) {
@@ -1246,6 +1314,16 @@
         const posCfg = battlerSprite._enemy ? keke_posCfgOpp : keke_posCfgFrd;
         const offsetX = safeNumber(posCfg["ずらしX"], 0) + (sprite._movedXKe || 0);
         const offsetY = safeNumber(posCfg["ずらしY"], 0) + (sprite._movedYKe || 0);
+
+        if (!battlerSprite._enemy) {
+            const center = actorCellCenter(battlerSprite._battler);
+            if (center) {
+                sprite.x = center.x + offsetX;
+                sprite.y = center.y + offsetY;
+                noOutScreen(sprite, sprite._frame.width, sprite._frame.height);
+                return;
+            }
+        }
         
         if (battlerSprite && battlerSprite.parent) {
             const pos = posCfg["表示方向"] === "上" ? -1 : posCfg["表示方向"] === "中央" ? -0.5 : 0;
@@ -1354,7 +1432,8 @@
     function destroyTotalDamageAll() {
         const scene = SceneManager._scene;
         if (!scene || !scene._spriteset) return;
-        const sprites = [...(scene._spriteset._actorSprites || []), ...(scene._spriteset._enemySprites || [])];
+        const sprites = [...(scene._spriteset._actorSprites || []), ...(scene._spriteset._enemySprites || []),
+            ...(scene._spriteset._actorCellAnchorsKe ? scene._spriteset._actorCellAnchorsKe.values() : [])];
         sprites.forEach(s => {
             if (s._totalDamageSpriteKe) destroyTotalDamage(s._totalDamageSpriteKe, s);
         });

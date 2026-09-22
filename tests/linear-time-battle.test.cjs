@@ -669,22 +669,22 @@ test('Window_Base subclass reserves layout once across nested rectangles and rel
         const { scene, window } = createTimeline();
         assert.ok(window instanceof Window_Base);
         assert.equal(scene.createdBaseWindows, true);
-        assert.equal(window.x, 6);
-        assert.equal(window.y, 66);
+        assert.equal(window.x, 0);
+        assert.equal(window.y, 60);
         assert.equal(window.height, 64);
         assert.equal(window.padding, 8);
         assert.equal(window.width, 8 * 48 + 16, 'compact: only as wide as the preview chips');
         assert.ok(window.width < Graphics.boxWidth / 2);
         for (const method of ['skillWindowRect', 'itemWindowRect', 'enemyWindowRect']) {
             const rect = scene[method]();
-            assert.equal(rect.y, 136);
+            assert.equal(rect.y, 124);
             assert.equal(rect.y + rect.height, 420, 'original list bottom is retained');
             assert.equal(scene._linearTimeRectDepth, 0);
         }
         assert.equal(scene.logWindowRect().height, 60);
         scene.relayoutBattleWindows();
-        assert.equal(scene._logWindow.y, 136);
-        assert.ok(window.y + window.height < scene._logWindow.y);
+        assert.equal(scene._logWindow.y, 124);
+        assert.equal(window.y + window.height, scene._logWindow.y, 'timeline and log touch with no gap');
     `);
 });
 
@@ -692,10 +692,10 @@ test('layout without top UI, narrow screen and ShowTimeline=false', () => {
     setup({}, { topUi: false })(`
         Graphics.boxWidth = 320;
         const { scene, window } = createTimeline();
-        assert.equal(window.y, 6);
+        assert.equal(window.y, 0);
         assert.equal(window.width, 6 * 48 + 16);
-        assert.ok(window.x + window.width <= Graphics.boxWidth - 6);
-        assert.equal(scene.skillWindowRect().y, 76);
+        assert.ok(window.x + window.width <= Graphics.boxWidth);
+        assert.equal(scene.skillWindowRect().y, 64);
         window.update();
         assert.equal(window._portraits.length, 6);
     `);

@@ -49,7 +49,6 @@
     const maxScreenHeight = Number(parameters.MaxScreenHeight || 1800);
     const desktopPortraitPreview = parameters.DesktopPortraitPreview !== "false";
     const mapScale = Math.max(1, Number(parameters.MapScale || 2));
-    const boxMargin = 4;
 
     const setupViewport = () => {
         const content = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
@@ -98,24 +97,20 @@
         return isExpandedDisplay() ? viewportHeight() : originalStretchHeight.call(this);
     };
 
-    const keepPcUiBox = () => {
-        Graphics.boxWidth = $dataSystem.advanced.uiAreaWidth - boxMargin * 2;
-        Graphics.boxHeight = $dataSystem.advanced.uiAreaHeight - boxMargin * 2;
-    };
-
-    const applyVisualScreenSize = () => {
+    const applyVisualScreenSize = scene => {
         if (shouldExpand()) {
             const size = visualScreenSize();
             Graphics._stretchEnabled = true;
             Graphics.resize(size.width, size.height);
         }
-        keepPcUiBox();
+        // Keep the PC UI box via the installed adjustBoxSize (NUUN_BoxMargin removes the 4px margin).
+        scene.adjustBoxSize();
     };
 
     const originalResizeScreen = Scene_Boot.prototype.resizeScreen;
     Scene_Boot.prototype.resizeScreen = function() {
         originalResizeScreen.call(this);
-        applyVisualScreenSize();
+        applyVisualScreenSize(this);
     };
 
     const originalCreateTilemap = Spriteset_Map.prototype.createTilemap;

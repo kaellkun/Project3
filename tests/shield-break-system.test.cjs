@@ -404,13 +404,13 @@ test('UI follows image top and scales without inheriting hue; redraw is cached',
     setup()(`
         const { source, scene, panel } = createPanel();
         assert.equal(panel.visible, true);
-        assert.ok(panel.y + panel.bitmap.height < 300);
+        assert.ok(panel.y + panel.bitmap.height <= 300);
         assert.equal(panel.parent, scene._shieldBreakLayer);
         const bitmap = panel.bitmap;
         source.x += 50; source.scale.y = 1.5;
         panel.update();
         assert.equal(panel.x, 350 - bitmap.width / 2);
-        assert.equal(panel.y + bitmap.height, 250 - 12);
+        assert.equal(panel.y + bitmap.height, 250);
         assert.equal(panel.bitmap, bitmap);
         enemy.damageShield(3);
         panel.update();
@@ -449,6 +449,6 @@ test('state icons retain their space above the enemy image', () => {
         const state = $dataStates.find(state => state && state.iconIndex && state.id !== 1);
         enemy.addState(state.id);
         const { panel } = createPanel();
-        assert.ok(panel.y + panel.bitmap.height <= 400 - 130 - ImageManager.iconHeight / 2 - 12);
+        assert.ok(panel.y + panel.bitmap.height <= 400 - 130 - ImageManager.iconHeight / 2);
     `);
 });

@@ -468,11 +468,44 @@ const getStateInfo = function(stateId) {
 // Scene_Battle
 //-----------------------------------------------------------------------------
 
+const goingToStatus = () => SceneManager.isNextScene(Scene_Status);
+const returningFromStatus = () => SceneManager.isPreviousScene(Scene_Status);
+
 const _Scene_Battle_createAllWindows = Scene_Battle.prototype.createAllWindows;
 Scene_Battle.prototype.createAllWindows = function() {
     _Scene_Battle_createAllWindows.call(this);
     this._stateInfoWindowWithActorCommand = false;
     this.createBattleStateInfoWindow();
+};
+
+const _Scene_Battle_stopForStatus = Scene_Battle.prototype.stop;
+Scene_Battle.prototype.stop = function() {
+    if (goingToStatus()) {
+        Scene_Message.prototype.stop.call(this);
+    } else {
+        _Scene_Battle_stopForStatus.call(this);
+    }
+};
+
+const _Scene_Battle_terminateForStatus = Scene_Battle.prototype.terminate;
+Scene_Battle.prototype.terminate = function() {
+    if (goingToStatus()) {
+        Scene_Message.prototype.terminate.call(this);
+        this._actorCommandWindow.hide();
+        SceneManager.snapForBackground();
+    } else {
+        _Scene_Battle_terminateForStatus.call(this);
+    }
+};
+
+const _Scene_Battle_startForStatus = Scene_Battle.prototype.start;
+Scene_Battle.prototype.start = function() {
+    if (returningFromStatus()) {
+        Scene_Message.prototype.start.call(this);
+        this._statusWindow.refresh();
+    } else {
+        _Scene_Battle_startForStatus.call(this);
+    }
 };
 
 const _createPartyCommandWindow = Scene_Battle.prototype.createPartyCommandWindow;

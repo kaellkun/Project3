@@ -297,7 +297,7 @@ test('real battle scene and timeline use the same expanded command bottom', () =
         assertRowFits(windowFor(Window_PartyCommand, scene.partyCommandWindowRect(), 2));
         assertRowFits(windowFor(Window_ActorCommand, scene.actorCommandWindowRect(), 4));
         assert.equal(scene.battleCommandHeight(), 88);
-        assert.equal(scene.logWindowRect().y, 88 + 6 + 64 + 6);
+        assert.equal(scene.logWindowRect().y, 88 + 64, 'timeline sits flush below the command bar');
         assert.equal(scene.skillWindowRect().y, scene.logWindowRect().y);
         assert.equal(scene.skillWindowRect().y + scene.skillWindowRect().height, scene.helpWindowRect().y);
     `);

@@ -1,8 +1,8 @@
 [
 null,
-{"id":1,"battlerName":"Actor1_2","characterIndex":1,"characterName":"Actor1","classId":1,"equips":[1,0,0,9,0],"faceIndex":1,"faceName":"Actor1","traits":[],"initialLevel":1,"maxLevel":99,"name":"プリシア","nickname":"","note":"","profile":""},
-{"id":2,"battlerName":"Actor1_5","characterIndex":4,"characterName":"Actor1","classId":2,"equips":[7,0,0,20,0],"faceIndex":4,"faceName":"Actor1","traits":[],"initialLevel":1,"maxLevel":99,"name":"アルベール","nickname":"","note":"","profile":""},
-{"id":3,"battlerName":"Actor1_6","characterIndex":5,"characterName":"Actor1","classId":3,"equips":[7,0,65,21,0],"faceIndex":5,"faceName":"Actor1","traits":[],"initialLevel":1,"maxLevel":99,"name":"ケイシー","nickname":"","note":"","profile":""},
+{"id":1,"battlerName":"Actor1_2","characterIndex":1,"characterName":"Actor1","classId":1,"equips":[1,1,0,4,6,9],"faceIndex":1,"faceName":"Actor1","traits":[],"initialLevel":1,"maxLevel":99,"name":"プリシア","nickname":"","note":"","profile":""},
+{"id":2,"battlerName":"Actor1_5","characterIndex":4,"characterName":"Actor1","classId":2,"equips":[2,2,0,5,7,8],"faceIndex":4,"faceName":"Actor1","traits":[],"initialLevel":1,"maxLevel":99,"name":"アルベール","nickname":"","note":"","profile":""},
+{"id":3,"battlerName":"Actor1_6","characterIndex":5,"characterName":"Actor1","classId":3,"equips":[3,2,3,5,7],"faceIndex":5,"faceName":"Actor1","traits":[],"initialLevel":1,"maxLevel":99,"name":"ケイシー","nickname":"","note":"","profile":""},
 {"id":4,"battlerName":"","characterIndex":0,"characterName":"","classId":2,"equips":[0,0,0,0,0],"faceIndex":0,"faceName":"","traits":[],"initialLevel":1,"maxLevel":99,"name":"ビーツー","nickname":"護衛ドローン","note":"","profile":"宇宙世紀853年製のニュータイプ対応ドローン。\n味方をかばい、シールドで守る最初の仲間。"},
 {"id":5,"battlerName":"","characterIndex":0,"characterName":"","classId":1,"equips":[0,0,0,0,0],"faceIndex":0,"faceName":"","traits":[],"initialLevel":1,"maxLevel":99,"name":"","nickname":"","note":"","profile":""},
 {"id":6,"battlerName":"","characterIndex":0,"characterName":"","classId":1,"equips":[0,0,0,0,0],"faceIndex":0,"faceName":"","traits":[],"initialLevel":1,"maxLevel":99,"name":"","nickname":"","note":"","profile":""},

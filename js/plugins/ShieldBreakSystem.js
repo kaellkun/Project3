@@ -46,7 +46,7 @@
  * @type number
  * @min 0
  * @max 300
- * @default 12
+ * @default 0
  *
  * @help
  * ■導入
@@ -124,7 +124,7 @@
         turns: number(parameters.BreakTurns, 1, 1, 99, true),
         rate: number(parameters.BreakDamageRate, 2, 1, 100),
         reveal: flag(parameters.RevealWeaknesses, true),
-        gap: number(parameters.UiOffsetY, 12, 0, 300)
+        gap: number(parameters.UiOffsetY, 0, 0, 300)
     };
 
     Game_Enemy.prototype.resetShieldBreak = function() {

@@ -16,7 +16,7 @@
  * 関連する戦闘/UIプラグインより下に配置してください。
  * 戦う → 攻撃技(タイプ1)、必殺技(2)、アイテム、補助･回復(3)、妨害(4)
  * オート → NRP_AutoBattleの全員自動戦闘。キャンセルで解除。
- * 戦況確認 → 味方ステータス、敵ステータス、バトルログ
+ * 戦況確認 → バトルログ、味方ステータス、敵ステータス
  * 編成変更 → 隊列変更、装備変更
  * 入れ替え → 入力中のアクターと控えを交代（その行動機会を消費）。
  * 逃げる → 通常の逃走判定。逃走禁止戦闘では選択不可。
@@ -62,10 +62,10 @@
                 break;
             }
             case "situation":
+                this.addCommand("バトルログ", "pastLog", !!Scene_Battle.prototype.commandPastLog);
                 this.addCommand("味方ステータス", "allyStatus", !!Scene_Battle.prototype.actorCommandStateInfo);
                 // The shared status screen displays party actors only.
                 this.addCommand("敵ステータス", "enemyStatus", false);
-                this.addCommand("バトルログ", "pastLog", !!Scene_Battle.prototype.commandPastLog);
                 this.addCommand("戻る", "commandBack");
                 break;
             case "formation":

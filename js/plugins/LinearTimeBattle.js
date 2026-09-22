@@ -207,7 +207,8 @@
 
     const cell = 48;
     const pad = 8;
-    const gap = 6;
+    // Windows touch each other; the whole battle UI is laid out with zero gaps.
+    const gap = 0;
     const barHeight = cell + pad * 2;
     const hasTopUi = () => PluginManager._scripts.includes("FlexibleTopDownUI");
     const timelineEnabled = () => enabled() && showTimeline;

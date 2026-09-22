@@ -49,6 +49,25 @@
     const compactFaceSize = 64;
     const commandTextExtraPadding = 20;
 
+    const compactBattleWindowTypes = [
+        Window_PartyCommand,
+        Window_ActorCommand,
+        Window_BattleLog,
+        Window_BattleStatus,
+        Window_BattleSkill,
+        Window_BattleItem,
+        Window_BattleActor,
+        Window_BattleEnemy
+    ];
+    for (const windowType of compactBattleWindowTypes) {
+        windowType.prototype.windowPadding = function() {
+            return 6;
+        };
+        windowType.prototype.itemPadding = function() {
+            return 4;
+        };
+    }
+
     const compactSkillStatusHeight = scene => {
         return Math.max(compactFaceSize + margin * 2, scene.calcWindowHeight(2, false));
     };
@@ -885,7 +904,8 @@
         setWindowRect(this._actorCommandWindow, 0, 0, boxW, cmdH);
 
         // Battle log sits directly below the active command row.
-        setWindowRect(this._logWindow, 0, cmdH, boxW, this.calcWindowHeight(10, false));
+        const logHeight = this._logWindow?.windowHeight?.() || this.calcWindowHeight(4, false);
+        setWindowRect(this._logWindow, 0, cmdH, boxW, logHeight);
 
         // Screen Bottom-aligned Status (Fixed Operation Area at the Bottom)
         setWindowRect(this._statusWindow, 0, boxH - statusH, boxW, statusH);

@@ -756,6 +756,14 @@
         return FRONT_SLOTS;
     };
 
+    Window_BattleStatus.prototype.colSpacing = function() {
+        return 0;
+    };
+
+    Window_BattleStatus.prototype.rowSpacing = function() {
+        return 0;
+    };
+
     Window_BattleStatus.prototype.itemRect = function(index) {
         const actor = this.actor(index);
         const front = $gameParty.formationFrontMembers();
@@ -909,7 +917,7 @@
     };
 
     Window_BattleStatus.prototype.formationCellLayout = function(rect) {
-        const gap = 6;
+        const gap = 0;
         const faceSize = Math.min(52, rect.height - 2);
         const ringSize = Math.min(46, rect.height - 2);
         const middleX = rect.x + faceSize + gap;
@@ -943,9 +951,9 @@
         this.drawBattleName(actor, x + tagWidth + 2, y, width - tagWidth - 2, nameH);
         y += nameH + 1;
         this.placeFormationGauge(actor, "hp", x, y, width);
-        y += gaugeH + 1;
+        y += gaugeH;
         this.placeFormationGauge(actor, "mp", x, y, width);
-        y += gaugeH + 2;
+        y += gaugeH;
         this.placeStateChips(actor, x, y, rect.x + rect.width - x);
         this.placeFormationGauge(actor, "tp", layout.ringX, rect.y, layout.ringSize, Sprite_RingGauge);
     };

@@ -400,8 +400,8 @@
  * 
  * @param 連続アニメディレイ
  * @parent 各動作速度
- * @desc rapidAnimeDelay 連続攻撃時のアニメーションの間隔。5 なら 5フレーム。基本 4
- * @default 4
+ * @desc rapidAnimeDelay 連続攻撃時のアニメーションの間隔。5 なら 5フレーム。基本 8
+ * @default 8
  *
  * @param 早送り倍率
  * @parent 各動作速度

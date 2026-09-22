@@ -168,7 +168,7 @@ function setup({ auto = true, equip = true, info = true, log = true,
         // Use actual vendor scene lifecycle/return/input gating. Only parameter
         // expression evaluation and the complex gauge-rendering window are stubbed.
         const source = slice('js/plugins/Battle/CMenu/KEN_BattleStateInformation.js',
-            'const _Scene_Battle_createAllWindows =',
+            'const goingToStatus =',
             '//-------------------------------------------------------------------------\n// Window_PartyCommand');
         run(`(() => {
             const WindowWidth = 800, WindowX = '0', WindowY = '0';
@@ -404,9 +404,8 @@ test('situation and formation labels/order and all action handlers are installed
         const scene = battleScene(), win = scene._actorCommandWindow;
         choose(win, 'situationMenu');
         assert.deepEqual(commandShape(win), [
-            ['味方ステータス', 'allyStatus', null], ['敵ステータス', 'enemyStatus', null],
-            ['バトルログ', 'pastLog', null],
-            ['戻る', 'commandBack', null]
+            ['バトルログ', 'pastLog', null], ['味方ステータス', 'allyStatus', null],
+            ['敵ステータス', 'enemyStatus', null], ['戻る', 'commandBack', null]
         ]);
         for (const c of win._list) {
             assert.equal(c.enabled, true);
@@ -666,6 +665,26 @@ test('real BattleEquipCommand roundtrip to fresh Scene_Battle restores formation
         assert.equal(BattleManager._phase, 'turn');
         resumed.startActorCommandSelection();
         assertLayer(resumed, 'root');
+    `);
+});
+
+test('status inspection roundtrip keeps the battle active and does not restart it', () => {
+    setup().run(`
+        const scene = battleScene();
+        const phase = BattleManager._phase;
+        scene.openStateInfoWindow();
+        assert.deepEqual(calls.pushed, [Scene_Status]);
+        scene.stop();
+        scene.terminate();
+        assert.equal($gameParty.inBattle(), true);
+        assert.equal(BattleManager._phase, phase);
+        SceneManager._nextScene = null;
+        SceneManager._previousClass = Scene_Status;
+        const resumed = battleScene();
+        BattleManager.startBattle = () => assert.fail('must not restart battle');
+        resumed.start();
+        assert.equal(BattleManager._phase, phase);
+        assert.equal($gameParty.inBattle(), true);
     `);
 });
 
