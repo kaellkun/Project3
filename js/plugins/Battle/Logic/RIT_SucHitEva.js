@@ -19,7 +19,13 @@
  *
  * 最終的な命中率(%)は
  * ・物理攻撃
- * (命中率 - 回避率) + (成功率 + 追加成功率 - 100)
+ * 成功率 + 追加成功率 + 命中補正 - 回避率
+ *
+ *   命中補正は使用者の命中率特徴から求めます。
+ *   ・アクター/職業/敵キャラ本体に命中率の特徴がある場合
+ *       命中補正 = 合計命中率 - 100   (例: 命中率95% → -5)
+ *   ・本体に命中率の特徴がない場合
+ *       命中補正 = 装備・ステートの命中率の合計   (例: 特徴なし → ±0)
  *
  * ・魔法攻撃
  * 成功率 + 追加成功率 - 魔法回避率
@@ -40,6 +46,28 @@
  (() => {
    'use strict';
 
+   const HIT_TRAIT = { code: Game_BattlerBase.TRAIT_XPARAM, dataId: 0 };
+
+   function hasBaseHitTrait(battler) {
+     const objects = battler.isActor()
+       ? [battler.actor(), battler.currentClass()]
+       : [battler.enemy()];
+     return objects.some(obj => obj && obj.traits.some(t =>
+       t.code === HIT_TRAIT.code && t.dataId === HIT_TRAIT.dataId));
+   }
+
+   //追加定義: 命中補正(小数)。本体に命中率がなければ装備・ステート分を加算補正として扱う
+   Game_Action.prototype.hitCorrection = function() {
+     const subject = this.subject();
+     return hasBaseHitTrait(subject) ? subject.hit - 1 : subject.hit;
+   };
+
+   //追加定義: スキルの追加成功率(小数)
+   Game_Action.prototype.additionalSuccessRate = function() {
+     const meta = this.item().meta;
+     return meta && meta.additionalSuccessRate ? Number(meta.additionalSuccessRate) * 0.01 : 0;
+   };
+
    //上書き定義
    const _Game_Action_itemHit = Game_Action.prototype.itemHit;
    Game_Action.prototype.itemHit = function(/*target*/) {
@@ -55,15 +83,12 @@
    const _Game_Action_itemEva = Game_Action.prototype.itemEva;
    Game_Action.prototype.itemEva = function(target) {
      let result = _Game_Action_itemEva.apply(this, arguments);
-     const successRate = this.item().successRate;
-     let add = 0;
-     if(this.item().meta.additionalSuccessRate){
-       add = Number(this.item().meta.additionalSuccessRate);
-     }
+     const successRate = this.item().successRate * 0.01;
+     const add = this.additionalSuccessRate();
      if (this.isPhysical()) {
-       result += 2 - successRate * 0.01 - add * 0.01 - this.subject().hit;
+       result += 1 - successRate - add - this.hitCorrection();
      } else if (this.isMagical()) {
-       result += 1 - successRate * 0.01 - add * 0.01;
+       result += 1 - successRate - add;
      }
      return result;
    };

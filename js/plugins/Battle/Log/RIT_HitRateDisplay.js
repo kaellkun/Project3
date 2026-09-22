@@ -19,11 +19,13 @@
  * ■表示イメージ
  * リーシラは氷礫3連弾を放った！
  * ├ [想定ダメージ量: ...]
- * ├ [アイスオーガ] 命中率: 95% [命中30%+成功95%-回避30%]
+ * ├ [アイスオーガ] 命中率: 60% [成功95%+命中補正-5%-回避30%]
  * │ ├ 787 のダメージを与えた！
  * │ └ 800 のダメージを与えた！
- * └ [ゴブリン] 命中率: 100%
+ * └ [ゴブリン] 命中率: 90% [成功95%+命中補正-5%-回避0%]
  *   └ 300 のダメージを与えた！
+ * 
+ * 表示される命中率は実際の判定(itemHit × (1 - itemEva))と同じ値です。
  * 
  * ■ライセンス
  * MIT License
@@ -134,23 +136,26 @@
         
         if (hitType === 0) {
             info.type = 'certain';
-            info.finalRate = successRate;
         } else if (hitType === 1) {
             info.type = 'physical';
-            info.hit = Math.round(this.subject().hit * 100);
+            // RIT_SucHitEva の命中補正。無い場合は素の命中率を表示に使う
+            const correction = this.hitCorrection ? this.hitCorrection() : this.subject().hit;
+            info.hit = Math.round(correction * 100);
             info.eva = Math.round(target.eva * 100);
-            info.finalRate = info.hit + successRate + additionalSuccessRate - info.eva;
         } else if (hitType === 2) {
             info.type = 'magical';
             info.mev = Math.round(target.mev * 100);
-            info.finalRate = successRate + additionalSuccessRate - info.mev;
         } else {
             info.type = 'other';
             info.hit = Math.round(this.subject().hit * 100);
             info.eva = Math.round(target.eva * 100);
-            info.finalRate = info.hit - info.eva;
         }
         
+        // 実際の判定と同じ値を表示する（成功/命中判定 × 回避判定）
+        const hitChance = Math.min(Math.max(this.itemHit(target), 0), 1);
+        const evaChance = Math.min(Math.max(this.itemEva(target), 0), 1);
+        info.finalRate = Math.round(hitChance * (1 - evaChance) * 100);
+
         info.displayRate = Math.max(param_MinHitRate, Math.min(param_MaxHitRate, info.finalRate));
         
         return info;
@@ -230,8 +235,10 @@
      */
     Window_BattleLog.prototype.makeHitRateDetailText = function(info) {
         switch (info.type) {
-            case 'physical':
-                return '[命中' + info.hit + '%+成功' + info.totalSuccess + '%-回避' + info.eva + '%]';
+            case 'physical': {
+                const sign = info.hit < 0 ? '' : '+';
+                return '[成功' + info.totalSuccess + '%+命中補正' + sign + info.hit + '%-回避' + info.eva + '%]';
+            }
             case 'magical':
                 return '[成功' + info.totalSuccess + '%-魔回避' + info.mev + '%]';
             case 'certain':

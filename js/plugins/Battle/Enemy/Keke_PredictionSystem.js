@@ -1100,10 +1100,12 @@
     // 再決定予約
     let redoReserve = null;
 
-    //- ゲームバトラー/TPBの初期化(処理追加)
-    const _Game_Battler_initTpbChargeTime = Game_Battler.prototype.initTpbChargeTime;
-    Game_Battler.prototype.initTpbChargeTime = function(advantageous) {
-        _Game_Battler_initTpbChargeTime.apply(this, arguments);
+    //- ゲームバトラー/戦闘開始時の処理(処理追加)
+    // initTpbChargeTime は LinearTimeBattle 等が元処理を呼ばずに置き換えるため、
+    // 呼び出し元の onBattleStart で行動予測を開始する
+    const _Game_Battler_onBattleStart = Game_Battler.prototype.onBattleStart;
+    Game_Battler.prototype.onBattleStart = function(advantageous) {
+        _Game_Battler_onBattleStart.apply(this, arguments);
 
         // 行動予測の開始(TPB)
         if (BattleManager.isTpb()) {

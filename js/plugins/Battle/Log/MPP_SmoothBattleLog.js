@@ -490,6 +490,21 @@
         }
     };
 
+    // Layout plugins may resize the log window after initialization; the line
+    // sprites must follow the recreated contents bitmap or text stays invisible.
+    const _Window_BattleLog_createContents = Window_BattleLog.prototype.createContents;
+    Window_BattleLog.prototype.createContents = function() {
+        _Window_BattleLog_createContents.apply(this, arguments);
+        if (!this._logSprites) return;
+        for (const [i, sprite] of this._logSprites.entries()) {
+            const rect = this.lineRect(i);
+            sprite.bitmap = this.contents;
+            sprite._homeX = rect.x;
+            sprite._homeY = rect.y;
+            sprite.setFrame(rect.x, rect.y, rect.width, rect.height);
+        }
+    };
+
     Window_BattleLog.prototype.fontSize = function() {
         return (
             param_BattleLogWindowParams['Font Size'] ||
