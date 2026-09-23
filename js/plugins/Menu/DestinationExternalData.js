@@ -47,6 +47,17 @@
     };
     const fontSize = setting('FontSize', 24, 12, 48);
 
+    const setDestination = args => {
+        $gameSystem.setDestinationId(Number(args.id || 0));
+    };
+    const clearDestination = () => {
+        $gameSystem.setDestinationId(0);
+    };
+    PluginManager.registerCommand(pluginName, 'SetDestination', setDestination);
+    PluginManager.registerCommand(fullName, 'SetDestination', setDestination);
+    PluginManager.registerCommand(pluginName, 'ClearDestination', clearDestination);
+    PluginManager.registerCommand(fullName, 'ClearDestination', clearDestination);
+
     class Window_MenuDestination extends Window_Base {
         initialize(rect) {
             this._lines = [];
@@ -71,7 +82,7 @@
         refresh() {
             this.resetFontSettings();
             this._resolvedText = this.resolvedText();
-            this._lines = this.wrapText(`\x1bC[16]行動目標\x1bC[0]\n${this._resolvedText}`);
+            this._lines = this.wrapText(`\x1bC[16]行動目標\x1bC[0] ${this._resolvedText}`);
             this.paint();
         }
         wrapText(text) {

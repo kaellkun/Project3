@@ -53,14 +53,14 @@
  * メニューの「並び替え」コマンドを、前衛3・後衛3の合計6マスに全メンバーから
  * 最大MaxBattleMembers人を割り当てる隊列編成画面に差し替えます。
  *
- * 左側: 全パーティメンバーの一覧（配置済みなら前1〜3/後1〜3、未配置なら控え）
- * 右側: 前衛3マス・後衛3マスのグリッド（割り当て済みメンバー名 or 空きマス）
+ * 左側: 前衛3マス・後衛3マスのグリッド（割り当て済みメンバー名 or 空きマス）
+ * 右側: 全パーティメンバーの一覧（配置済みなら前1〜3/後1〜3、未配置なら控え）
  *
  * 操作:
- *   左の一覧でOK … そのメンバーを選択して右のマス選択に移る
- *   右のマスでOK … 選択中のメンバーをそのマスに配置（既にいる場合は入れ替え）
- *   右のマスでキャンセル … 配置を中止して左の一覧に戻る
- *   左の一覧でキャンセル … 編成を終えてメニューへ戻る
+ *   戦闘中はアクティブアクターのマスを左で選択した状態から開始します。
+ *   左の別マスでOK … アクティブアクターをそのマスへ移動（既にいる場合は入れ替え）
+ *   右の別メンバーでOK … アクティブアクターのマスとそのメンバーを入れ替え
+ *   右でキャンセル … 左のマス選択に戻る。左でキャンセル … 編成を終えて戻る
  *
  * 前衛(スロット1〜3)には最低1人必要です。それ以外は自由に配置できます。
  * 戦闘中のアクターウィンドウも、前衛グループを上段、後衛グループを下段に
@@ -1018,25 +1018,32 @@
         const top = this.skillWindowRect().y;
         const bottom = this.statusWindowRect().y;
         const available = bottom - top;
+        const helpH = 56;
+        const helpY = bottom - helpH;
+        const boardBottom = helpY - 4;
+        const boardAvailable = Math.max(1, boardBottom - top);
         // Fit all six cells (plus the group gap and padding) in the free area.
-        const rowH = Math.max(28, Math.min(44, Math.floor((available - 16 - 24) / TOTAL_SLOTS)));
-        const height = Math.min(available, rowH * TOTAL_SLOTS + 16 + 24);
-        const rosterW = Math.floor(Graphics.boxWidth * 0.42);
-        const roster = new Window_FormationRoster(new Rectangle(0, top, rosterW, height), rowH);
-        const grid = new Window_FormationGrid(new Rectangle(rosterW, top, Graphics.boxWidth - rosterW, height), rowH);
-        roster.setHandler("ok", this.onBattleFormationRosterOk.bind(this));
-        roster.setHandler("cancel", this.onBattleFormationRosterCancel.bind(this));
-        roster.setOnBoundary(dir => { if (dir === "right") this.onBattleFormationRosterOk(); });
+        const rowH = Math.max(24, Math.min(44, Math.floor((boardAvailable - 16 - 24) / TOTAL_SLOTS)));
+        const height = Math.min(boardAvailable, rowH * TOTAL_SLOTS + 16 + 24);
+        const gridW = Math.floor(Graphics.boxWidth * 0.58);
+        const grid = new Window_FormationGrid(new Rectangle(0, top, gridW, height), rowH);
+        const roster = new Window_FormationRoster(new Rectangle(gridW, top, Graphics.boxWidth - gridW, height), rowH);
+        const help = new Window_Help(new Rectangle(0, helpY, Graphics.boxWidth, helpH));
+        help.setText("移動するアクターの位置を変えます。変える先を選んでください。\n左側のマスを選ぶとその位置へ移動し、右側のパーティーメンバーを選ぶと入れ替わります。");
         grid.setHandler("ok", this.onBattleFormationGridOk.bind(this));
-        grid.setHandler("cancel", this.onBattleFormationGridCancel.bind(this));
-        grid.setOnBoundary(dir => { if (dir === "left") this.onBattleFormationGridCancel(); });
-        for (const win of [roster, grid]) {
+        grid.setHandler("cancel", this.onBattleFormationRosterCancel.bind(this));
+        grid.setOnBoundary(dir => { if (dir === "right") this.activateBattleFormationRoster(); });
+        roster.setHandler("ok", this.onBattleFormationRosterOk.bind(this));
+        roster.setHandler("cancel", this.onBattleFormationGridCancel.bind(this));
+        roster.setOnBoundary(dir => { if (dir === "left") this.activateBattleFormationGrid(); });
+        for (const win of [roster, grid, help]) {
             win.hide();
             win.deactivate();
             this.addWindow(win);
         }
         this._battleFormationRoster = roster;
         this._battleFormationGrid = grid;
+        this._battleFormationHelp = help;
         this._battleFormationPending = null;
         this._battleFormationBefore = null;
     };
@@ -1046,13 +1053,32 @@
         this._battleFormationBefore = $gameParty.formationSlots().slice();
         this._battleFormationActor = BattleManager.actor();
         this._battleFormationPending = null;
-        const targets = $gameParty.battleMembers();
-        this._battleFormationRoster.setList(targets);
-        this._battleFormationRoster.select(0);
-        this._battleFormationGrid.deselect();
+        this._battleFormationRoster.setList(
+            $gameParty.allMembers().filter(actor => actor !== this._battleFormationActor)
+        );
+        this._battleFormationHelp.setText(
+            `${this._battleFormationActor ? this._battleFormationActor.name() : "アクター"}の位置を変えます。変える先を選んでください。\n` +
+            "左側のマスを選ぶとその位置へ移動し、右側のパーティーメンバーを選ぶと入れ替わります。"
+        );
         this._battleFormationGrid.refresh();
+        const actorSlot = $gameParty.slotIndexOfActor(this._battleFormationActor);
+        this._battleFormationGrid.select(actorSlot >= 0 ? actorSlot : 0);
+        this._battleFormationRoster.deselect();
         this._battleFormationRoster.show();
         this._battleFormationGrid.show();
+        this._battleFormationHelp.show();
+        this.activateBattleFormationGrid();
+    };
+
+    Scene_Battle.prototype.activateBattleFormationGrid = function() {
+        this._battleFormationRoster.deactivate();
+        this._battleFormationRoster.deselect();
+        this._battleFormationGrid.activate();
+    };
+
+    Scene_Battle.prototype.activateBattleFormationRoster = function() {
+        this._battleFormationGrid.deactivate();
+        this._battleFormationRoster.select(0);
         this._battleFormationRoster.activate();
     };
 
@@ -1062,28 +1088,25 @@
             this._battleFormationRoster.activate();
             return;
         }
-        this._battleFormationPending = target;
-        const slot = $gameParty.slotIndexOfActor(target);
-        this._battleFormationRoster.deactivate();
-        this._battleFormationGrid.select(slot >= 0 ? slot : -1);
-        this._battleFormationGrid.activate();
+        const actorSlot = $gameParty.slotIndexOfActor(this._battleFormationActor);
+        if (target === this._battleFormationActor || actorSlot < 0 ||
+            !$gameParty.assignFormationSlot(target, actorSlot)) {
+            SoundManager.playBuzzer();
+            this._battleFormationRoster.activate();
+            return;
+        }
+        SoundManager.playEquip();
+        this.finishBattleFormation();
     };
 
     Scene_Battle.prototype.onBattleFormationGridCancel = function() {
-        this._battleFormationPending = null;
-        this._battleFormationGrid.deactivate();
-        this._battleFormationGrid.deselect();
-        this._battleFormationRoster.activate();
+        this.activateBattleFormationGrid();
     };
 
     Scene_Battle.prototype.onBattleFormationGridOk = function() {
         const actor = this._battleFormationActor;
-        const target = this._battleFormationPending;
-        const targetSlot = target ? $gameParty.slotIndexOfActor(target) : -1;
-        const destinationSlot = target === actor ? this._battleFormationGrid.index() : targetSlot;
-        if (!actor || !target || targetSlot < 0 ||
-            (target !== actor && this._battleFormationGrid.index() !== targetSlot) ||
-            !$gameParty.assignFormationSlot(actor, destinationSlot)) {
+        const destinationSlot = this._battleFormationGrid.index();
+        if (!actor || !$gameParty.assignFormationSlot(actor, destinationSlot)) {
             SoundManager.playBuzzer();
             this._battleFormationGrid.activate();
             return;
@@ -1095,7 +1118,7 @@
     };
 
     Scene_Battle.prototype.hideBattleFormationWindows = function() {
-        for (const win of [this._battleFormationRoster, this._battleFormationGrid]) {
+        for (const win of [this._battleFormationRoster, this._battleFormationGrid, this._battleFormationHelp]) {
             if (!win) continue;
             win.hide();
             win.deactivate();
@@ -1123,6 +1146,9 @@
     // Formation changes are a menu operation and do not consume the actor's
     // current action or TPB charge.
     Scene_Battle.prototype.finishBattleFormation = function() {
+        $gameParty.requestMotionRefresh();
+        this._statusWindow.refresh();
+        this._statusWindow.selectActor(BattleManager.actor());
         this.hideBattleFormationWindows();
         if (this._actorCommandWindow.setBattleCommandLayer) {
             this._actorCommandWindow.setBattleCommandLayer("root", "formation");

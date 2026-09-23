@@ -102,10 +102,30 @@
             this.showMainWindow();
         }
 
-        mainWindowRect() {
+        windowRect(rowCount) {
             const ww = Math.min(520, Graphics.boxWidth - 48);
-            const wh = this.calcWindowHeight(3, true);
-            return new Rectangle((Graphics.boxWidth - ww) / 2, this._helpWindow.height + 24, ww, wh);
+            const y = this._helpWindow.height + 24;
+            const maxRows = Math.max(1, Math.floor(
+                (Graphics.boxHeight - y - 24) / this.calcWindowHeight(1, true)
+            ));
+            const wh = this.calcWindowHeight(Math.min(rowCount, maxRows), true);
+            return new Rectangle((Graphics.boxWidth - ww) / 2, y, ww, wh);
+        }
+
+        mainWindowRect() {
+            return this.windowRect(3);
+        }
+
+        itemWindowRect() {
+            return this.windowRect(Math.max(1, this.meatItems().length));
+        }
+
+        quantityWindowRect(item) {
+            return this.windowRect(Math.max(1, $gameParty.numItems(item)));
+        }
+
+        confirmWindowRect() {
+            return this.windowRect(2);
         }
 
         createMainWindow() {
@@ -117,7 +137,7 @@
         }
 
         createItemWindow() {
-            const rect = this.mainWindowRect();
+            const rect = this.itemWindowRect();
             this._itemWindow = new Window_CampRestItem(rect, this.meatItems());
             this._itemWindow.setHandler("item", this.onItem.bind(this));
             this._itemWindow.setHandler("cancel", this.showMainWindow.bind(this));
@@ -125,15 +145,16 @@
         }
 
         createQuantityWindow() {
-            const rect = this.mainWindowRect();
-            this._quantityWindow = new Window_CampRestQuantity(rect, this.meatItems()[0] || $dataItems[1]);
+            const item = this.meatItems()[0] || $dataItems[1];
+            const rect = this.quantityWindowRect(item);
+            this._quantityWindow = new Window_CampRestQuantity(rect, item);
             this._quantityWindow.setHandler("quantity", this.onQuantity.bind(this));
             this._quantityWindow.setHandler("cancel", this.showItemWindow.bind(this));
             this.addWindow(this._quantityWindow);
         }
 
         createConfirmWindow() {
-            const rect = this.mainWindowRect();
+            const rect = this.confirmWindowRect();
             this._confirmWindow = new Window_CampRestConfirm(rect);
             this._confirmWindow.setHandler("yes", this.onConfirm.bind(this));
             this._confirmWindow.setHandler("no", this.showQuantityWindow.bind(this));
@@ -156,6 +177,7 @@
 
         onMeat() {
             this._itemWindow.refresh();
+            this._itemWindow.move(this.itemWindowRect());
             this._mainWindow.deactivate();
             this._mainWindow.hide();
             this._itemWindow.show();
@@ -172,6 +194,7 @@
         onItem() {
             this._selectedItem = this._itemWindow.currentExt();
             this._quantityWindow._item = this._selectedItem;
+            this._quantityWindow.move(this.quantityWindowRect(this._selectedItem));
             this._quantityWindow.refresh();
             this._itemWindow.hide();
             this._quantityWindow.show();

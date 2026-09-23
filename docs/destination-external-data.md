@@ -11,7 +11,7 @@
 
 ### プラグインコマンド
 
-`NUUN_Destination:SetDestination` を使用します。この表示プラグインは専用のメニューコマンドを追加しません。
+`NUUN_Destination:SetDestination` または `Menu/DestinationExternalData:SetDestination` を使用します。解除は `Menu/DestinationExternalData:ClearDestination` です。この表示プラグインは専用のメニューコマンドを追加しません。
 
 ### スクリプト
 
