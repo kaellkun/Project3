@@ -5,9 +5,10 @@
 - 本体: [DestinationExternalData.js](../js/plugins/Menu/DestinationExternalData.js)
 - 行動目標の内容とID: [NUUN_Destination.js](../js/plugins/Menu/NUUN_Destination.js)
 - 登録: [plugins.js](../js/plugins.js) のBattleEquipCommandより後。NUUN_Destination必須、FlexibleTopDownUIの後に置く。
-- パラメータ: `FontSize=24`（12〜48）。
+- パラメータ: `FontSize=24`（12〜48）、`DestinationIdVariableId=0`（現在の行動目標IDを書き込む変数番号。0は無効）。
 
 行動目標の登録・変更・解除はNUUN_Destinationの既存仕様を使用します。追加のJSONファイルは読み込みません。保存値と既存セーブとの互換性も同プラグインに委ねます。
+`DestinationIdVariableId` に変数を指定すると、NUUNのコマンド・アドオンのコマンド・スクリプトから行動目標を変更した際に現在のIDを書き込みます。解除時は0を書き込み、既存のセーブを読み込んだ際も保存された行動目標IDで変数を同期します。変数への書き込みによって行動目標は変更されません。
 
 ### プラグインコマンド
 

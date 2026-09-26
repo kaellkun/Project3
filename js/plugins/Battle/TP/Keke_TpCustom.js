@@ -730,9 +730,16 @@
 
         const item = this.item();
         const tpGain = item.tpGain;
-        item.tpGain = 0;
-        _Game_Action_applyItemUserEffect.apply(this, arguments);
-        item.tpGain = tpGain;
+        // 得TPが0なら、標準処理の gainSilentTp(0) 自体を呼ばない。
+        // 明示的な「使用効果：TP増加」は applyItemEffect 側で通常どおり処理する。
+        if (tpGain !== 0) {
+            item.tpGain = 0;
+            try {
+                _Game_Action_applyItemUserEffect.apply(this, arguments);
+            } finally {
+                item.tpGain = tpGain;
+            }
+        }
 
         // TPチャージ1回だけフラグをオン
         if (keke_tpChargeOnlyOnce) {

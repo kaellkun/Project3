@@ -361,6 +361,44 @@ test('fight first five commands are types 1, 2, item, 3, 4 with Back last', () =
     `);
 });
 
+test('usable special skills highlight the 必殺技 command', () => {
+    setup({ layout: false }).run(`
+        const scene = battleScene(), win = scene._actorCommandWindow;
+        choose(win, 'fightMenu');
+        const index = win.findExt(2);
+        const drawn = [];
+        ColorManager.textColor = color => 'palette-' + color;
+        const drawText = win.contents.drawText;
+        win.contents.drawText = function(...args) {
+            if (args[0] === '必殺技') drawn.push({ color: this.textColor, opacity: this.paintOpacity });
+            return drawText.apply(this, args);
+        };
+        win.drawItem(index);
+        assert.deepEqual(drawn, [{ color: 'palette-24', opacity: 255 }]);
+    `);
+});
+
+test('unusable special skills use a distinct dim color without disabling the command', () => {
+    setup({ layout: false }).run(`
+        const scene = battleScene(), win = scene._actorCommandWindow;
+        choose(win, 'fightMenu');
+        const skill = $dataSkills[skillIds[1]];
+        skill.mpCost = 999;
+        win.actor().setMp(0);
+        win.refresh();
+        const index = win.findExt(2), drawn = [];
+        ColorManager.textColor = color => 'palette-' + color;
+        const drawText = win.contents.drawText;
+        win.contents.drawText = function(...args) {
+            if (args[0] === '必殺技') drawn.push({ color: this.textColor, opacity: this.paintOpacity });
+            return drawText.apply(this, args);
+        };
+        assert.equal(win.isCommandEnabled(index), true);
+        win.drawItem(index);
+        assert.deepEqual(drawn, [{ color: 'palette-8', opacity: 160 }]);
+    `);
+});
+
 test('unavailable skill types stay visible and disabled; disabled OK cannot dispatch', () => {
     setup().run(`
         $dataActors[1].traits = [{ code: 41, dataId: 1, value: 1 }];

@@ -174,24 +174,40 @@
     };
 
     const _Game_Action_itemCri            = Game_Action.prototype.itemCri;
+    const hasSpecialAttackElement = action => {
+        const item = action.item();
+        if (!item || item.damage.type === 0) {
+            return false;
+        }
+        const elements = typeof $gameTemp !== 'undefined' &&
+            typeof $gameTemp.getAllElementsKe === 'function' ?
+            $gameTemp.getAllElementsKe(action) :
+            item.damage.elementId < 0 ? action.subject().attackElements() :
+            item.damage.elementId > 0 ? [item.damage.elementId] : [];
+        return elements.some(id => $dataSystem?.elements?.[id]?.includes('特攻'));
+    };
+
     Game_Action.prototype.itemCri = function(target) {
         const queue = this._criticalQueue;
         if (queue && queue.length > 0) {
             return queue.shift() ? 1.0 : 0.0;
         } else {
-            return _Game_Action_itemCri.apply(this, arguments);
+            return hasSpecialAttackElement(this) ? 1.0 :
+                _Game_Action_itemCri.apply(this, arguments);
         }
     };
 
     Game_Action.prototype.judgeCritical = function(target) {
+        if (this.item().damage.type === 0) {
+            return;
+        }
         const changeValue = PluginManagerEx.findMetaValue(this.item(), ['CC確率変更', 'CCProbChange']);
         let itemCritical;
-        if (changeValue) {
+        if (hasSpecialAttackElement(this)) {
+            itemCritical = 1;
+        } else if (changeValue) {
             itemCritical = changeValue / 100;
         } else {
-            if (this.item().damage.type === 0) {
-                return;
-            }
             const addValue = PluginManagerEx.findMetaValue(this.item(), ['CC確率加算', 'CCProbAdd']);
             itemCritical = _Game_Action_itemCri.apply(this, arguments) + (addValue ? addValue / 100 : 0);
         }

@@ -87,7 +87,7 @@ function setup(options = {}) {
     run(read('js/rmmz_objects.js'));
     run(`
         const window = globalThis;
-        const Utils = { isOptionValid: () => false };
+        const Utils = { isOptionValid: () => false, cacheBustedUrl: url => url };
         const Graphics = { frameCount: 0, width: 816, height: 624 };
         const ImageManager = { isZeroParallax: () => false, isObjectCharacter: () => false,
             isReady: () => true, loadFace() {}, loadPicture() {} };
@@ -539,6 +539,50 @@ test('v2 Morning resets daytime progress; StartNight and transition commons are 
         expectState(false, 31, 0, 1); assert.equal($gameSwitches.value(20), false);
         assert.deepEqual($gameTemp._commonEventQueue, [4, 8]);
         tick(); assert.deepEqual(log, ['予約', 'メニュー']);
+    `);
+});
+
+test('day-night plugin respawns daily, rock, and plant event switches on night-to-morning only', () => {
+    setup()(`
+        initial();
+        const makeEvent = (id, meta) => ({ id, name: '採取物', note: '', meta, x: id, y: 1, pages: [] });
+        $dataMap.events = [null,
+            makeEvent(1, { '日次リポップ': true }),
+            makeEvent(2, { '岩破壊': '2' }),
+            makeEvent(3, { '草木採取': true }),
+            makeEvent(4, { '採取アクション': '148,12' }),
+            makeEvent(5, {})];
+        $gameMap.setup(10);
+        for (let id = 1; id <= 5; id++) $gameSelfSwitches.setValue([10, id, 'A'], true);
+        $gameSelfSwitches.setValue([10, 1, 'B'], true);
+
+        command('StartNight');
+        assert.equal($gameSystem._mapTypeCommonEventRespawnDay, 0);
+        command('Morning');
+
+        assert.equal($gameSystem._mapTypeCommonEventRespawnDay, 1);
+        for (let id = 1; id <= 4; id++) assert.equal($gameSelfSwitches.value([10, id, 'A']), false);
+        assert.equal($gameSelfSwitches.value([10, 5, 'A']), true);
+        assert.equal($gameSelfSwitches.value([10, 1, 'B']), true);
+        command('Morning');
+        assert.equal($gameSystem._mapTypeCommonEventRespawnDay, 1);
+    `);
+});
+
+test('day-night plugin AdvanceDay resets tagged events on map re-entry', () => {
+    setup()(`
+        initial();
+        const eventData = { id: 1, name: '草木', note: '', meta: { '日次リポップ': true },
+            x: 1, y: 1, pages: [] };
+        $dataMap.events = [null, eventData]; $gameMap.setup(10);
+        $gameSelfSwitches.setValue([10, 1, 'A'], true);
+        transfer(11, '');
+        command('AdvanceDay');
+        assert.equal($gameSystem._mapTypeCommonEventRespawnDay, 1);
+        assert.equal($gameSelfSwitches.value([10, 1, 'A']), true);
+        transfer(10, '');
+        $dataMap.events = [null, eventData]; $gameMap.setup(10);
+        assert.equal($gameSelfSwitches.value([10, 1, 'A']), false);
     `);
 });
 

@@ -7,18 +7,29 @@
  * @plugindesc Adds on-screen controls for touch devices.
  * @author kaellkun
  *
+ * @param EnableDiagonalMovement
+ * @text 斜め移動を有効化
+ * @type boolean
+ * @on 有効
+ * @off 無効
+ * @default true
+ * @desc スティック・方向ボタンで斜め移動できるようにします。
+ *
  * @help MobileTouchControls.js
  *
  * Displays an eight-way joystick surrounded by four direction buttons.
  * Drag the stick to move, or hold a direction button. Tap the stick center
  * for OK. X cancels/opens the menu; L/R switch pages where available.
- * Touch directions support diagonal map movement using MZ collision checks.
+ * Touch directions support diagonal map movement using MZ collision checks
+ * when EnableDiagonalMovement is enabled.
  * Menus, keyboard, gamepad, and map-tap movement keep their normal behavior.
  */
 
 (() => {
     "use strict";
 
+    const parameters = PluginManager.parameters("MobileTouchControls");
+    const diagonalMovementEnabled = parameters.EnableDiagonalMovement !== "false";
     const touchState = {
         up: false,
         down: false,
@@ -96,6 +107,10 @@
         }
         const horz = direction === 1 || direction === 7 ? 4 : 6;
         const vert = direction === 1 || direction === 3 ? 2 : 8;
+        if (!diagonalMovementEnabled) {
+            const straightDirection = [2, 4, 6, 8].includes(Input.dir4) ? Input.dir4 : horz;
+            return originalExecuteMove.call(this, straightDirection);
+        }
         // Use the player's native movement to preserve collision and followers.
         this.moveDiagonally(horz, vert);
         if (!this.isMovementSucceeded()) {

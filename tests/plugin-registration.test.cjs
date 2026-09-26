@@ -185,6 +185,12 @@ test('Keke_TpCustom charges damage TP only once per action', () => {
     assert.equal(parameters['TPチャージ1回だけ'], 'true');
 });
 
+test('MobileTouchControls disables diagonal movement in the project configuration', () => {
+    const plugin = registered(loadPlugins(), 'MobileTouchControls');
+    assert.equal(plugin.status, true);
+    assert.equal(plugin.parameters.EnableDiagonalMovement, 'false');
+});
+
 test('BattleEquipCommand is enabled and ChangeEquipOnBattleMZ is not registered', () => {
     const plugins = loadPlugins();
     assert.equal(registered(plugins, 'BattleEquipCommand').status, true);

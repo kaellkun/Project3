@@ -11,6 +11,11 @@
  * @min 12
  * @max 48
  * @default 24
+ * @param DestinationIdVariableId
+ * @text 現在の行動目標IDを格納する変数
+ * @desc 0で無効。行動目標の変更・解除時とセーブ読込時に現在のIDを書き込みます。
+ * @type variable
+ * @default 0
  * @command SetDestination
  * @text 行動目標を設定
  * @arg id
@@ -26,6 +31,7 @@
  * 行動目標の内容とIDはNUUN_Destinationの設定を使用します。
  * メニュー画面の所持金の上に、見出しと本文1行を常に表示します。
  * 専用のメニューコマンドは追加しません。本文が長い場合は表示領域内で折り返し後半を省略します。
+ * 変数を指定すると、行動目標のID（未設定時は0）を自動的に書き込みます。
  * 制御文字: \V \N \P \G \C \I。
  */
 
@@ -46,6 +52,26 @@
         return value;
     };
     const fontSize = setting('FontSize', 24, 12, 48);
+    const destinationIdVariableId = setting('DestinationIdVariableId', 0, 0, 9999);
+
+    const syncDestinationId = system => {
+        if (destinationIdVariableId > 0 && $gameVariables) {
+            const id = system.getDestinationId();
+            if ($gameVariables.value(destinationIdVariableId) !== id) {
+                $gameVariables.setValue(destinationIdVariableId, id);
+            }
+        }
+    };
+    const originalSetDestinationId = Game_System.prototype.setDestinationId;
+    Game_System.prototype.setDestinationId = function(id) {
+        originalSetDestinationId.call(this, id);
+        syncDestinationId(this);
+    };
+    const originalOnAfterLoad = Game_System.prototype.onAfterLoad;
+    Game_System.prototype.onAfterLoad = function() {
+        originalOnAfterLoad.apply(this, arguments);
+        syncDestinationId(this);
+    };
 
     const setDestination = args => {
         $gameSystem.setDestinationId(Number(args.id || 0));

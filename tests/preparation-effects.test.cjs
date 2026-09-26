@@ -296,6 +296,18 @@ test('critical-disabled magic neither receives nor consumes standalone guarantee
     `);
 });
 
+test('特攻属性 attacks are guaranteed critical, including added elements', () => {
+    setup({speed:false}).run(`
+        const specialId=$dataSystem.elements.indexOf('鉱石特攻');
+        skill(900,{damage:{critical:false,elementId:specialId}});
+        const direct=action(); direct.apply(b); assert.equal(b.result().critical,true);
+        b.recoverAll();
+        $gameTemp.getAllElementsKe=()=>[specialId];
+        skill(901,{damage:{critical:false,elementId:0}});
+        const added=action(901); added.apply(b); assert.equal(b.result().critical,true);
+    `);
+});
+
 test('104 critical bonus is added once, respects CEV and installed critical formula', () => {
     setup().run(`
         $dataClasses[1].traits.push({code:22,dataId:2,value:.25});

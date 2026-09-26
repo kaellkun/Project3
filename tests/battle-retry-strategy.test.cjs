@@ -91,6 +91,13 @@ function makeGameInterpreterClass() {
 
 function buildContext(parameterOverrides) {
     const { Scene_Base, Scene_Gameover, Scene_Message } = makeSceneClasses();
+    function Scene_Map() {}
+    function Game_Player() {}
+    Game_Player.prototype.moveStraight = function() {};
+    Game_Player.prototype.moveDiagonally = function() {};
+    Game_Player.prototype.executeEncounter = function() {
+        return false;
+    };
     const context = {
         Rectangle,
         Window_Command: makeWindowCommandClass(),
@@ -98,12 +105,16 @@ function buildContext(parameterOverrides) {
         Scene_Base,
         Scene_Gameover,
         Scene_Message,
+        Scene_Map,
+        Game_Player,
+        $gameMap: { mapId() { return 1; } },
         Game_Interpreter: makeGameInterpreterClass(),
         Graphics: { boxWidth: 816, boxHeight: 624 },
         PluginManager: {
             parameters: () => Object.assign({
                 askCommonEventId: "0",
                 troopVariableId: "0",
+                innCommonEventId: "0",
                 askStrategyText: "攻略法を聞きますか？",
                 askYesText: "聞く",
                 askNoText: "聞かない"
@@ -124,8 +135,18 @@ function buildContext(parameterOverrides) {
             extractSaveContents() {}
         },
         SoundManager: { playBattleStart() {} },
-        SceneManager: { goto() {} },
+        SceneManager: {
+            goto(sceneClass) {
+                this.lastScene = sceneClass;
+            }
+        },
         $dataCommonEvents: { 5: { list: ["dummyCommand"] } },
+        $gameTemp: {
+            reservedCommonEventId: 0,
+            reserveCommonEvent(id) {
+                this.reservedCommonEventId = id;
+            }
+        },
         $gameVariables: {
             values: {},
             setValue(id, value) {
@@ -141,6 +162,7 @@ function buildContext(parameterOverrides) {
 test("BattleRetryOnPartyDeath is valid JavaScript and documents the strategy prompt", () => {
     assert.match(pluginSource, /@param askCommonEventId/);
     assert.match(pluginSource, /@param troopVariableId/);
+    assert.match(pluginSource, /@param innCommonEventId/);
     assert.match(pluginSource, /攻略法を聞きますか？/);
 });
 
@@ -152,9 +174,10 @@ test("BattleRetryOnPartyDeath registration exposes the new parameters", () => {
     assert.equal(plugin.status, true);
     assert.equal(plugin.parameters.askCommonEventId, "0");
     assert.equal(plugin.parameters.troopVariableId, "0");
+    assert.equal(plugin.parameters.innCommonEventId, "0");
 });
 
-test("Without a configured common event, defeat goes straight to the retry/gameover window", () => {
+test("Without configured strategy or inn events, defeat shows the two top-level choices", () => {
     const context = buildContext({});
     context.BattleManager.setup(7, false, false);
 
@@ -165,7 +188,7 @@ test("Without a configured common event, defeat goes straight to the retry/gameo
     assert.ok(!scene._battleRetryAskWindow);
     assert.deepEqual(
         scene._battleRetryWindow._commands.map(c => c.symbol),
-        ["retry", "gameover"]
+        ["beforeBattle", "gameover"]
     );
 });
 
@@ -213,4 +236,31 @@ test("Choosing not to hear the strategy skips the common event entirely", () => 
     assert.ok(!scene._battleRetryInterpreter);
     assert.ok(scene._battleRetryWindow);
     assert.equal(context.$gameVariables.values[3], undefined);
+});
+
+test("The second level offers retry, inn, and return-before-battle", () => {
+    const context = buildContext({ innCommonEventId: "5" });
+    context.BattleManager.setup(12, false, false);
+
+    const scene = Object.create(context.Scene_Gameover.prototype);
+    scene.create();
+    scene._battleRetryWindow._handlers.beforeBattle();
+
+    assert.deepEqual(
+        scene._battleRetrySubWindow._commands.map(command => command.symbol),
+        ["retry", "inn", "beforeMap"]
+    );
+});
+
+test("Choosing inn restores the pre-battle state, reserves the common event, and returns to the map", () => {
+    const context = buildContext({ innCommonEventId: "5" });
+    context.BattleManager.setup(13, false, false);
+
+    const scene = Object.create(context.Scene_Gameover.prototype);
+    scene.create();
+    scene._battleRetryWindow._handlers.beforeBattle();
+    scene._battleRetrySubWindow._handlers.inn();
+
+    assert.equal(context.$gameTemp.reservedCommonEventId, 5);
+    assert.equal(context.SceneManager.lastScene, context.Scene_Map);
 });

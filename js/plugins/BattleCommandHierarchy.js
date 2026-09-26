@@ -22,6 +22,7 @@
  * 逃げる → 通常の逃走判定。逃走禁止戦闘では選択不可。
  *
  * スキルタイプ未所持・封印中の項目は無効表示します。
+ * 必殺技は使用可能なスキルがあると強調色になり、ない場合は別の淡色で表示します。
  * 装備・情報・ログからは各サブメニューに戻り、行動ゲージを消費しません。
  * 入れ替えは並び替え許可時のみ。戦闘不能・行動不能・自動戦闘の控えは
  * 選択できません。HP/MP/TP・ステートは保持し、交代した２人のゲージと
@@ -90,6 +91,18 @@
     // large sign. Keep the exact menu names visible using normal dimmed text;
     // availability still comes from its addSkillCommands/addItemCommand hooks.
     Window_ActorCommand.prototype.drawItem = function(index) {
+        const command = this._list[index];
+        if (this._battleCommandLayer === "fight" && command?.symbol === "skill" &&
+            command.ext === 2 && this.isCommandEnabled(index)) {
+            const canUseSpecial = this._actor.skills().some(skill =>
+                skill.stypeId === 2 && this._actor.canUse(skill));
+            const rect = this.itemLineRect(index);
+            this.resetTextColor();
+            this.changeTextColor(ColorManager.textColor(canUseSpecial ? 24 : 8));
+            this.changePaintOpacity(canUseSpecial);
+            this.drawText(this.commandName(index), rect.x, rect.y, rect.width, this.itemTextAlign());
+            return;
+        }
         Window_Command.prototype.drawItem.call(this, index);
     };
     Window_ActorCommand.prototype.isTouchOkEnabled = function() { return true; };

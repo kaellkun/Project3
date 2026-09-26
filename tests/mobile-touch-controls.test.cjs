@@ -110,7 +110,7 @@ function dom() {
     return { window, document, dispatch };
 }
 
-function setup() {
+function setup(pluginParameters = { EnableDiagonalMovement: 'true' }) {
     const { window, document, dispatch } = dom();
     const gamepads = [];
     const destinations = [];
@@ -136,6 +136,7 @@ function setup() {
     const navigator = { getGamepads: () => gamepads };
     window.navigator = navigator;
     const context = vm.createContext({ window, document, navigator, console,
+        PluginManager: { parameters: name => name === 'MobileTouchControls' ? pluginParameters : {} },
         Graphics: { pageToCanvasX: x => x, pageToCanvasY: y => y, isInsideCanvas: () => true },
         $gameMap: gameMap, $dataSystem: { optTransparent: false },
         $gameMessage: { busy: false, isBusy() { return this.busy; } },
@@ -631,6 +632,22 @@ test('two dpad directions move the native player diagonally; releasing one resto
     h.pointer('pointerup', h.canvas, 12); h.frame();
     h.player.moveByInput();
     assertSteps(h, 2);
+});
+
+test('diagonal movement can be disabled by plugin parameter', () => {
+    for (const direction of [1, 3, 7, 9]) {
+        const h = setup({ EnableDiagonalMovement: 'false' });
+        holdDirection(h, direction);
+        const straightDirection = h.Input.dir4;
+        const [x, y] = position(h.player);
+        h.player.moveByInput();
+        const [expectedX, expectedY] = straightDirection === 4 ? [x - 1, y] :
+            straightDirection === 6 ? [x + 1, y] :
+                straightDirection === 8 ? [x, y - 1] : [x, y + 1];
+        assert.deepEqual(position(h.player), [expectedX, expectedY], `input ${direction}`);
+        assert.equal(h.player.isMovementSucceeded(), true);
+        assertSteps(h, 1, [x, y]);
+    }
 });
 
 for (const gate of ['event', 'message', 'forcing', 'followers']) {

@@ -1,11 +1,11 @@
 //=============================================================================
-// RPG Maker MZ - MapTypeCommonEvent v2.0.0
+// RPG Maker MZ - MapTypeCommonEvent v2.1.0
 // Released under the MIT license.
 //=============================================================================
 
 /*:
  * @target MZ
- * @plugindesc マップ種別の入場コモン・昼夜フィルター・特殊シンボル撃破による夜を管理。(v2.0.0)
+ * @plugindesc マップ種別・昼夜・日次リポップ・特殊シンボル撃破による夜を管理。(v2.1.0)
  * @author Project3
  * @orderAfter Keke_TimingCommon
  * @orderAfter LN_FilmicFilter
@@ -124,6 +124,10 @@
  * @command Morning
  * @text 朝にする（宿泊など）
  * @desc 昼へ戻し、今回の撃破進捗を0にします。累計撃破数と夜の到来回数は保持します。
+
+ * @command AdvanceDay
+ * @text 日付を進めて日次アイテムを再ポップ
+ * @desc 昼夜状態に関係なく日付を1日進め、日次リポップ対象のセルフスイッチAをOFFにします。
  *
  * @command StartNight
  * @text 夜にする（強制）
@@ -212,6 +216,10 @@
  * 例：必要3で一度に加算10 → 累計10、進捗0、夜到来1。3夜分にはしません。
  * 夜中の撃破は累計だけ増え、次の昼には繰り越しません。
  * 夜明けは自動ではありません。宿泊・物語イベントで「朝にする」を実行。
+ * 夜から朝へ切り替わると日付も1日進みます。<日次リポップ>、<岩破壊>、
+ * <草木採取>、<PlantHarvest> のイベントはセルフスイッチAが朝に解除され、再出現します。
+ * これらのスイッチAはイベントの入手処理でONにしてください。他の日付管理を使う場合は、
+ * 日付が進むイベントで「日付を進めて日次アイテムを再ポップ」を実行します。
  * 「朝にする」は昼でも進捗0にします。累計と夜到来回数は減らしません。
  * 「夜にする」は強制イベント用。すでに夜なら到来回数は増えません。
  * 必要に応じて「今回の撃破進捗を変更」で調整し、次の撃破時に判定できます。
@@ -386,6 +394,84 @@
         return $gameSystem._mapTypeDayNight;
     }
 
+    function respawnDay() {
+        if (!Number.isSafeInteger($gameSystem._mapTypeCommonEventRespawnDay)) {
+            const legacyDay = $gameSystem._mapRockBreakingRespawnDay;
+            $gameSystem._mapTypeCommonEventRespawnDay = Number.isSafeInteger(legacyDay) ? legacyDay : 0;
+        }
+        return $gameSystem._mapTypeCommonEventRespawnDay;
+    }
+
+    function respawnRecords() {
+        if (!$gameSystem._mapTypeCommonEventRespawnRecords) {
+            $gameSystem._mapTypeCommonEventRespawnRecords =
+                $gameSystem._mapRockBreakingRespawnRecords || {};
+        }
+        return $gameSystem._mapTypeCommonEventRespawnRecords;
+    }
+
+    function isDailyRespawnEvent(data) {
+        const meta = data && data.meta || {};
+        return meta['日次リポップ'] !== undefined || meta.DailyRespawn !== undefined ||
+            meta['岩破壊'] !== undefined || meta.RockBreak !== undefined ||
+            meta['草木採取'] !== undefined || meta.PlantHarvest !== undefined ||
+            meta['採取アクション'] !== undefined || meta.GatherAction !== undefined;
+    }
+
+    function respawnEventData(mapId, eventId) {
+        return $gameMap && $gameMap.mapId() === mapId && $dataMap && $dataMap.events
+            ? $dataMap.events[eventId] : null;
+    }
+
+    function respawnKey(mapId, eventId) {
+        return `${mapId}:${eventId}`;
+    }
+
+    function clearExpiredRespawn(mapId, eventId, resetUntracked = false) {
+        const key = [mapId, eventId, 'A'];
+        const record = respawnRecords()[respawnKey(mapId, eventId)];
+        const legacyCutoff = $gameSystem._mapRockBreakingRespawnLegacyCutoffDay || 0;
+        const expired = record === undefined
+            ? resetUntracked || (legacyCutoff > 0 && respawnDay() >= legacyCutoff)
+            : record < respawnDay();
+        if (expired && $gameSelfSwitches.value(key)) $gameSelfSwitches.setValue(key, false);
+    }
+
+    function advanceRespawnDay() {
+        const nextDay = Math.min(Number.MAX_SAFE_INTEGER, respawnDay() + 1);
+        $gameSystem._mapTypeCommonEventRespawnDay = nextDay;
+        if (!$gameSystem._mapRockBreakingRespawnLegacyCutoffDay) {
+            $gameSystem._mapRockBreakingRespawnLegacyCutoffDay = nextDay;
+        }
+        if ($dataMap && $dataMap.events && $gameMap) {
+            for (const event of $gameMap.events()) {
+                if (isDailyRespawnEvent(event.event())) {
+                    clearExpiredRespawn(event._mapId, event.eventId(), true);
+                }
+            }
+        }
+    }
+
+    PluginManager.registerCommand(pluginName, 'AdvanceDay', advanceRespawnDay);
+
+    const upstreamEventInitialize = Game_Event.prototype.initialize;
+    Game_Event.prototype.initialize = function() {
+        upstreamEventInitialize.apply(this, arguments);
+        if (isDailyRespawnEvent(this.event())) clearExpiredRespawn(this._mapId, this.eventId());
+    };
+
+    const upstreamSelfSwitchSetValue = Game_SelfSwitches.prototype.setValue;
+    Game_SelfSwitches.prototype.setValue = function(key, value) {
+        upstreamSelfSwitchSetValue.apply(this, arguments);
+        if (key[2] !== 'A') return;
+        const data = respawnEventData(key[0], key[1]);
+        if (!isDailyRespawnEvent(data)) return;
+        const records = respawnRecords();
+        const recordKey = respawnKey(key[0], key[1]);
+        if (value) records[recordKey] = respawnDay();
+        else delete records[recordKey];
+    };
+
     function requiredKills() {
         const s = state();
         let result = thresholdList.length ? thresholdList[Math.min(s.nights, thresholdList.length - 1)] :
@@ -466,7 +552,10 @@
         s.night = false;
         s.progress = 0;
         syncNightSwitch();
-        if (wasNight) reserveTransitionCommon(morningCommon);
+        if (wasNight) {
+            advanceRespawnDay();
+            reserveTransitionCommon(morningCommon);
+        }
         refreshCurrentMapFilter();
     });
     PluginManager.registerCommand(pluginName, 'SetProgress', args => {
