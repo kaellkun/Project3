@@ -322,12 +322,20 @@ test('root has exactly five labels in order, with real optional integrations', (
     setup().run(`
         const scene = battleScene(), win = scene._actorCommandWindow;
         assert.deepEqual(commandShape(win), [
-            ['戦う', 'fightMenu', null], ['オート', 'autoBattle', null], ['戦況確認', 'situationMenu', null],
+            ['スキル', 'fightMenu', null], ['オート', 'autoBattle', null], ['戦況確認', 'situationMenu', null],
             ['入れ替え', 'swap', null], ['逃げる', 'escape', null]
         ]);
         assert.ok(win._list.every(c => c.enabled));
         assert.equal(win.isTouchOkEnabled(), true);
         assertLayer(scene, 'root', 'fightMenu');
+    `);
+});
+
+test('root escape command displays the current escape probability', () => {
+    setup({ layout: false }).run(`
+        BattleManager._escapeRatio = 0.847;
+        const scene = battleScene(), win = scene._actorCommandWindow;
+        assert.equal(win._list.find(command => command.symbol === 'escape').name, '逃げる 85%');
     `);
 });
 

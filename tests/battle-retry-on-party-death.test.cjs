@@ -32,17 +32,25 @@ function setup(includePlayer = false) {
     };
     Game_Player.prototype.update = function() {};
     const player = new Game_Player();
-    function Window_Command() {}
+    function Window_Command(rect) {
+        this.rect = rect;
+        this.list = [];
+        this.makeCommandList();
+    }
     Window_Command.prototype.setHandler = function(symbol, handler) {
         this.handlers = this.handlers || {};
         this.handlers[symbol] = handler;
     };
     Window_Command.prototype.deactivate = function() {};
+    Window_Command.prototype.addCommand = function(name, symbol) {
+        this.list.push({ name, symbol });
+    };
     function Scene_Gameover() {}
     Scene_Gameover.prototype.create = function() {};
     Scene_Gameover.prototype.gotoTitle = function() {
         this.titled = true;
     };
+    function Scene_Map() {}
     const context = vm.createContext({
         BattleManager: {
             setup(troopId, canEscape, canLose) {
@@ -80,6 +88,7 @@ function setup(includePlayer = false) {
         Window_Command,
         Game_Player,
         $gamePlayer: player,
+        $gameVariables: { value() { return 1; } },
         $gameMap: { mapId() { return 1; } },
         Rectangle: function Rectangle(x, y, width, height) {
             this.x = x;
@@ -90,7 +99,9 @@ function setup(includePlayer = false) {
         Graphics: { boxWidth: 816, boxHeight: 624 },
         SoundManager: { playBattleStart() { commands.push('sound'); } },
         SceneManager: { goto(scene) { commands.push(scene); } },
+        $gameTemp: { reserveCommonEvent(id) { this.reservedCommonEventId = id; } },
         Scene_Battle: function Scene_Battle() {},
+        Scene_Map,
         Scene_Gameover
     });
     context.Window_Command.prototype = {
@@ -121,7 +132,6 @@ test('captures the pre-battle state and restores it for retry', () => {
 
     const scene = new context.Scene_Gameover();
     scene.create();
-    scene.window.handlers.beforeBattle();
     scene.window.handlers.retry();
 
     assert.deepEqual(extracted, [{ party: { hp: 100 } }]);
@@ -135,7 +145,7 @@ test('game over clears the retry state and goes to the title', () => {
     context.BattleManager.setup(3, false, false);
     const scene = new context.Scene_Gameover();
     scene.create();
-    scene.window.handlers.gameover();
+    scene.window.handlers.title();
 
     assert.equal(scene.titled, true);
     const nextScene = new context.Scene_Gameover();
@@ -143,21 +153,37 @@ test('game over clears the retry state and goes to the title', () => {
     assert.equal(nextScene.window, undefined);
 });
 
-test('random encounter retry restores the position from before the triggering move', () => {
-    const { context, extracted } = setup(true);
-    const player = context.$gamePlayer;
-
-    player.update(false);
-    player.x = 3;
-    player._triggerBattle = () => context.BattleManager.setup(8, true, false);
-    player.executeEncounter();
-
+test('game over shows exactly three direct choices', () => {
+    const { context } = setup();
+    context.BattleManager.setup(3, false, false);
     const scene = new context.Scene_Gameover();
     scene.create();
-    scene.window.handlers.beforeBattle();
-    scene.window.handlers.retry();
 
-    assert.equal(extracted[0].player._x, 2);
-    assert.equal(extracted[0].player._y, 4);
-    assert.equal(extracted[0].player._direction, 6);
+    assert.deepEqual(scene.window.list.map(command => command.name), [
+        'リトライ', '宿屋に戻る', 'タイトルに戻る'
+    ]);
+});
+
+test('returning to the inn restores the pre-battle state and starts the inn event', () => {
+    const { context, commands, extracted } = setup();
+    context.BattleManager.setup(3, false, false);
+    const scene = new context.Scene_Gameover();
+    scene.create();
+    scene.window.handlers.inn();
+
+    assert.deepEqual(extracted, [{ party: { hp: 100 } }]);
+    assert.equal(context.$gameTemp.reservedCommonEventId, 5);
+    assert.equal(commands.at(-1), context.Scene_Map);
+});
+
+test('hides the inn choice when the inn map variable is zero', () => {
+    const { context } = setup();
+    context.$gameVariables.value = () => 0;
+    context.BattleManager.setup(3, false, false);
+    const scene = new context.Scene_Gameover();
+    scene.create();
+
+    assert.deepEqual(scene.window.list.map(command => command.name), [
+        'リトライ', 'タイトルに戻る'
+    ]);
 });

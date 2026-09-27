@@ -40,6 +40,12 @@
     const canSwapIn = actor => actor.isAlive() && actor.canMove() && !actor.isAutoBattle();
     const canSwap = () => $gameSystem.isFormationEnabled() && reserves().some(canSwapIn);
     const columns = () => Graphics.boxWidth < 640 ? 3 : 6;
+    const escapeCommandName = () => {
+        const ratio = Number(BattleManager._escapeRatio);
+        if (!Number.isFinite(ratio)) return TextManager.escape || "逃げる";
+        const percent = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
+        return `${TextManager.escape || "逃げる"} ${percent}%`;
+    };
 
     // Reuse the actor command window itself. The engine's skill/item target
     // cancellation still sees the original symbol and skill-type ext.
@@ -75,11 +81,11 @@
                 this.addCommand("戻る", "commandBack");
                 break;
             default:
-                this.addCommand("戦う", "fightMenu");
+                this.addCommand("スキル", "fightMenu");
                 this.addCommand("オート", "autoBattle", !!BattleManager.setAutoBattleMode);
                 this.addCommand("戦況確認", "situationMenu");
                 this.addCommand("入れ替え", "swap", canSwap());
-                this.addCommand("逃げる", "escape", BattleManager.canEscape());
+                this.addCommand(escapeCommandName(), "escape", BattleManager.canEscape());
                 break;
         }
     };

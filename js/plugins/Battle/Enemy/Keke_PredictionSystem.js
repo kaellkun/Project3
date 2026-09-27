@@ -3141,9 +3141,14 @@
     
     //- スプライトの検索-バトラー
     function searchSpriteBattler(battler) {
-        const spriteset = SceneManager._scene._spriteset;
+        const scene = SceneManager._scene;
+        const spriteset = scene && scene._spriteset;
+        if (!spriteset || !battler) { return null; }
         let result = null;
         const sprites = battler._enemyId ? spriteset._enemySprites : spriteset._actorSprites;
+        // Sprite_Actor is also used for map field actions (harvesting/rock breaking).
+        // Those scenes have _characterSprites, not battle _actorSprites/_enemySprites.
+        if (!Array.isArray(sprites)) { return null; }
         for (const sprite of sprites) {
             if(!sprite._battler) { continue; }
             if ((battler._actorId && sprite._battler._actorId == battler._actorId) || (battler._enemyId && sprite._battler.index() == battler.index())) {

@@ -5,7 +5,7 @@
 
 /*:
  * @target MZ
- * @plugindesc 敵のシールドブレイクと、敵画像上部の弱点表示UI v1.0.0
+ * @plugindesc 敵のシールドブレイクと、敵画像上部の弱点表示 UI v1.0.1
  * @author kaellkun
  *
  * @param DefaultShield
@@ -77,6 +77,7 @@
  * タグはシールド判定のみを変更し、DBの属性有効度は変更しません。
  * 通常攻撃属性(-1)は攻撃者の攻撃属性を参照。武器弱点は、アクターの
  * 通常攻撃属性(-1)の攻撃が対象で、装備中の武器タイプを参照します。
+ * Keke_ElementFullCustom導入時は「属性追加」で合成された全ての属性も弱点判定に含めます。
  *
  * ■スキル・アイテムのメモ欄
  * <ShieldDamage:2>           1ヒットのシールド減少量（0で減少なし）
@@ -262,7 +263,11 @@
     function matchingWeaknesses(action, target) {
         const elementId = action.item().damage.elementId;
         const subject = action.subject();
-        const elements = elementId < 0 ? subject.attackElements() : [elementId];
+        // Keke_ElementFullCustom導入時は「属性追加」で合成された全属性を弱点判定に含める。
+        const elements = typeof $gameTemp !== "undefined" && $gameTemp &&
+            typeof $gameTemp.getAllElementsKe === "function" ?
+            $gameTemp.getAllElementsKe(action) :
+            elementId < 0 ? subject.attackElements() : [elementId];
         const weapons = elementId < 0 && subject.isActor() ?
             subject.weapons().map(weapon => weapon.wtypeId) : [];
         return target._sbWeaknesses.filter(weakness =>

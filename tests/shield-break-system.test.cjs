@@ -160,6 +160,26 @@ test('DB element rates are inferred before using fallback', () => {
     `);
 });
 
+test('Keke_ElementFullCustom combined elements count toward weaknesses, not just the primary element', () => {
+    setup()(`
+        configure('<WeakElements:4>');
+        // Simulates Keke_ElementFullCustom's public API: a skill whose primary
+        // element is 11 (slash) but combines 1 and 4 (the declared weakness) via <属性追加>.
+        $gameTemp.getAllElementsKe = () => [11, 1, 4];
+        attack({ element: 11 }).apply(enemy);
+        assert.equal(enemy.shieldPoints(), 2, 'the combined element (4) is matched even though the primary element (11) is not');
+    `);
+});
+
+test('without Keke_ElementFullCustom, only the primary/attack element is used as before', () => {
+    setup()(`
+        configure('<WeakElements:4>');
+        assert.equal(typeof $gameTemp.getAllElementsKe, 'undefined');
+        attack({ element: 11 }).apply(enemy);
+        assert.equal(enemy.shieldPoints(), 3, 'no match: the primary element alone is not the declared weakness');
+    `);
+});
+
 test('tags override defaults and filter duplicate/invalid IDs', () => {
     setup()(`
         configure('<ShieldPoints:5><WeakElements:2,3,2,999,-1><BreakTurns:2><BreakDamageRate:2.5>');
