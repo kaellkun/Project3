@@ -336,9 +336,10 @@ for (const [width,height] of [[816,624],[480,816],[390,844],[808,1400],[1280,720
             const fits=Project3ResistRateDisplay.panelRect(scene).height>0;
             assert.equal(panel.visible,fits);
             if (fits) {
-                assert.equal(panel.y,area.y); assert.ok(panel.y>=scene.battleCommandHeight()+76);
+                assert.equal(panel.y,area.y); assert.ok(panel.y>=scene.helpWindowRect().y+scene.helpWindowRect().height);
                 assert.equal(e.y,panel.y+panel.height); assert.ok(e.maxPageRows()>=1);
-                assert.equal(e.y+e.height,scene.helpWindowRect().y);
+                assert.ok(e.y >= scene.helpWindowRect().y + scene.helpWindowRect().height);
+                assert.equal(e.y+e.height,Graphics.boxHeight);
                 assert.equal(panel._description.element.rate,0.75);
                 for (const [text,x,y,w,h] of panel.contents.text) {
                     assert.ok(x>=0 && y>=0 && x+w<=panel.innerWidth && y+h<=panel.innerHeight);

@@ -88,7 +88,7 @@ function setup(includePlayer = false) {
         Window_Command,
         Game_Player,
         $gamePlayer: player,
-        $gameVariables: { value() { return 1; } },
+        $gameVariables: { value(id) { return id === 21 ? 11 : 0; } },
         $gameMap: { mapId() { return 1; } },
         Rectangle: function Rectangle(x, y, width, height) {
             this.x = x;
@@ -117,7 +117,7 @@ function setup(includePlayer = false) {
         }
     };
     context.Window_Command.prototype.constructor = Window_Command;
-    context.Scene_Gameover.prototype.calcWindowHeight = () => 120;
+    context.Scene_Gameover.prototype.calcWindowHeight = lines => lines * 48;
     context.Scene_Gameover.prototype.createWindowLayer = function() {};
     context.Scene_Gameover.prototype.addWindow = function(window) {
         this.window = window;
@@ -162,6 +162,11 @@ test('game over shows exactly three direct choices', () => {
     assert.deepEqual(scene.window.list.map(command => command.name), [
         'リトライ', '宿屋に戻る', 'タイトルに戻る'
     ]);
+    assert.equal(scene.window.maxCols(), 3);
+    assert.equal(scene.window.list.length, scene.window.maxCols());
+    assert.equal(scene.window.rect.width, 768);
+    assert.equal(scene.window.rect.x, 24);
+    assert.equal(scene.window.rect.height, 48);
 });
 
 test('returning to the inn restores the pre-battle state and starts the inn event', () => {
@@ -176,9 +181,9 @@ test('returning to the inn restores the pre-battle state and starts the inn even
     assert.equal(commands.at(-1), context.Scene_Map);
 });
 
-test('hides the inn choice when the inn map variable is zero', () => {
+test('hides the inn choice when only an unrelated variable has a value', () => {
     const { context } = setup();
-    context.$gameVariables.value = () => 0;
+    context.$gameVariables.value = id => id === 20 ? 11 : 0;
     context.BattleManager.setup(3, false, false);
     const scene = new context.Scene_Gameover();
     scene.create();
@@ -186,4 +191,7 @@ test('hides the inn choice when the inn map variable is zero', () => {
     assert.deepEqual(scene.window.list.map(command => command.name), [
         'リトライ', 'タイトルに戻る'
     ]);
+    assert.equal(scene.window.maxCols(), 2);
+    assert.equal(scene.window.list.length, scene.window.maxCols());
+    assert.equal(scene.window.rect.height, 48);
 });

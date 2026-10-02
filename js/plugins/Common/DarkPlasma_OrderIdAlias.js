@@ -77,12 +77,13 @@
     } else if (b === null) {
       return -1;
     }
-    return (a.orderId || a.id) - (b.orderId || b.id);
+    return (a.orderId ?? a.id) - (b.orderId ?? b.id);
   }
 
-  const pluginName = document.currentScript.src.replace(/^.*\/(.*).js$/, function () {
-    return arguments[1];
-  });
+  const pluginSrc = document.currentScript.src.split(/[?#]/, 1)[0];
+  const pluginName = decodeURIComponent(
+    pluginSrc.slice(pluginSrc.lastIndexOf("/") + 1).replace(/\.js$/, "")
+  );
 
   const pluginParametersOf = (pluginName) => PluginManager.parameters(pluginName);
 

@@ -1019,7 +1019,8 @@ for (const [width, height, cols, rows] of [[360, 800, 3, 2], [639, 900, 3, 2],
             const scene = battleScene(), win = scene._actorCommandWindow;
             assert.equal(scene.battleCommandHeight(), scene.calcCommandWindowHeight(${rows}));
             assert.equal(win.x, 0);
-            assert.equal(win.y, 0);
+            assert.equal(win.y + win.height, scene.statusWindowRect().y,
+                'actor command sits directly above the status area');
             assert.equal(win.width, Graphics.boxWidth);
             assert.equal(win.height, scene.battleCommandHeight());
             for (const layer of ['root', 'fight', 'situation', 'formation']) {
@@ -1040,14 +1041,21 @@ for (const [width, height, cols, rows] of [[360, 800, 3, 2], [639, 900, 3, 2],
                 }
                 assert.equal(win.contents.text.length, win.maxItems());
             }
-            const skill = scene.skillWindowRect(), reserve = scene._battleReserveWindow;
-            assert.equal(skill.y, scene.battleCommandHeight());
-            assert.ok(skill.height > 0);
-            assert.ok(skill.y + skill.height <= scene._helpWindow.y);
+            const skill = scene.skillWindowRect(), help = scene.helpWindowRect(), reserve = scene._battleReserveWindow;
+            assert.deepEqual([skill.x, skill.y, skill.width, skill.height],
+                [0, help.height, Graphics.boxWidth, Graphics.boxHeight - help.height],
+                'skill list starts below the top help and fills the remaining screen');
+            assert.equal(help.y, 0, 'battle help stays at the top');
+            assert.deepEqual([scene.itemWindowRect().x, scene.itemWindowRect().y,
+                scene.itemWindowRect().width, scene.itemWindowRect().height],
+                [skill.x, skill.y, skill.width, skill.height]);
+            assert.deepEqual([scene.enemyWindowRect().x, scene.enemyWindowRect().y,
+                scene.enemyWindowRect().width, scene.enemyWindowRect().height],
+                [skill.x, skill.y, skill.width, skill.height]);
             assert.deepEqual([reserve.x, reserve.y, reserve.width, reserve.height],
                 [skill.x, skill.y, skill.width, skill.height]);
             const info = scene.battleStateInfoWindowRect();
-            assert.equal(info.y, scene.battleCommandHeight());
+            assert.equal(info.y, skill.y);
             assert.equal(info.x, Math.floor((Graphics.boxWidth - info.width) / 2));
             assert.ok(info.width <= Graphics.boxWidth);
             assert.ok(info.height > 0 && info.y + info.height <= Graphics.boxHeight);

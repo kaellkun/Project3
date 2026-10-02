@@ -51,6 +51,11 @@
  * <AddEquipSlot3:7>
  * 
  * ※Please note that the order is: unmarked, 2, 3.
+ *
+ * You can also configure items that permanently unlock slots for their target actor
+ * in the "EquipSlotUnlockItems" plugin parameter. Each item can be used up to its
+ * configured maximum per actor; set its item scope to one ally and choose the
+ * equipment type, slots added per use, and maximum uses. Progress is saved per actor.
  * 
  * -------------------------------------------------------------------
  * ■Equip Unique
@@ -142,6 +147,11 @@
  * @type string
  * @desc Display the specified Equipment Type or later on a separate page.
  * Multiple items can be specified. (e.g.: 4,6)
+ *
+ * @param EquipSlotUnlockItems
+ * @type struct<EquipSlotUnlockItem>[]
+ * @desc Items that permanently unlock extra equipment slots for their target actor, up to a configured use limit.
+ * @default []
  * 
  * @param StatusShowSlots
  * @text [MZ]StatusShowSlots
@@ -215,6 +225,11 @@
  * <AddEquipSlot3:7>
  * 
  * ※無印, 2, 3の順序であることにご注意ください。
+ *
+ * プラグインパラメータ「装備スロット解禁アイテム」にアイテムを登録すると、
+ * 使用対象のアクターに指定した装備タイプのスロットを恒久追加できます。
+ * アイテムごとにアクターごとの最大使用回数を設定できます。対象を「味方単体」に設定し、
+ * 装備タイプ・1回の追加数・最大使用回数を指定してください。使用回数はアクターごとにセーブされます。
  * 
  * -------------------------------------------------------------------
  * ■同一系統の装備を禁止
@@ -298,6 +313,12 @@
  * @type string
  * @desc 指定の装備タイプ以降を別ページに表示します。
  * 複数指定可能です。（例：4,6）
+ *
+ * @param EquipSlotUnlockItems
+ * @text 装備スロット解禁アイテム
+ * @type struct<EquipSlotUnlockItem>[]
+ * @desc 対象アクターが使用すると、設定した上限回数まで指定スロットを恒久追加します。
+ * @default []
  * 
  * @param StatusShowSlots
  * @text [MZ]ｽﾃｰﾀｽの表示スロット
@@ -327,6 +348,32 @@
  * @type boolean
  * @default false
  * @desc 同じアイテムを複数装備できなくします。
+ */
+
+/*~struct~EquipSlotUnlockItem:
+ * @param ItemId
+ * @text 解禁アイテム
+ * @type item
+ * @default 1
+ *
+ * @param EquipType
+ * @text 装備タイプ
+ * @type number
+ * @min 1
+ * @default 5
+ *
+ * @param Count
+ * @text 追加スロット数
+ * @type number
+ * @min 1
+ * @default 1
+ *
+ * @param MaxUses
+ * @text アクターごとの最大使用回数
+ * @desc このアイテムを1アクターに使用できる最大回数です。使用ごとに「追加スロット数」分増えます。
+ * @type number
+ * @min 1
+ * @default 1
  */
 
 (function() {
@@ -372,6 +419,15 @@ const pDefaultEquipSlots = parseStruct1(parameters["DefaultEquipSlots"]);
 const pAdjustInitEquip = toBoolean(parameters["AdjustInitEquip"], false);
 const pDualWieldPosition = toNumber(parameters["DualWieldPosition"], 2);
 const pPagingEquipmentType = parameters["PagingEquipmentType"];
+const pEquipSlotUnlockItems = (parseStruct1(parameters["EquipSlotUnlockItems"]) || [])
+    .map(str => JSON.parse(str))
+    .map(config => ({
+        itemId: toNumber(config.ItemId, 0),
+        equipType: toNumber(config.EquipType, 0),
+        count: Math.max(0, Math.floor(toNumber(config.Count, 1))),
+        maxUses: Math.max(1, Math.floor(toNumber(config.MaxUses, 1)))
+    }))
+    .filter(config => config.itemId > 0 && config.equipType > 0 && config.count > 0);
 const pStatusShowSlots = parseStruct1(parameters["StatusShowSlots"]);
 const pArmorTypeUnique = toBoolean(parameters["ArmorTypeUnique"], false);
 const pArmorUnique = toBoolean(parameters["ArmorUnique"], false);
@@ -508,6 +564,16 @@ Game_Actor.prototype.equipSlots = function() {
         }
     }
 
+    // 解禁アイテムの使用回数に応じた追加スロットを反映
+    for (const config of pEquipSlotUnlockItems) {
+        const useCount = this.equipSlotUnlockItemUseCount(config.itemId);
+        if (useCount > 0) {
+            for (let i = 0; i < config.count * useCount; i++) {
+                slots.push(config.equipType);
+            }
+        }
+    }
+
     // スロットを数値順でソート
     slots.sort((a, b) => a - b);
 
@@ -543,6 +609,85 @@ Game_Actor.prototype.equipSlots = function() {
     }
 
     return slots;
+};
+
+/**
+ * ●装備スロット解禁アイテムの使用状態
+ */
+Game_Actor.prototype.isEquipSlotUnlockItemUsed = function(itemId) {
+    return this.equipSlotUnlockItemUseCount(itemId) > 0;
+};
+
+/**
+ * ●装備スロット解禁アイテムの使用回数
+ */
+Game_Actor.prototype.equipSlotUnlockItemUseCount = function(itemId) {
+    const numericItemId = Number(itemId);
+    const useCounts = this._equipSlotUnlockUseCounts || {};
+    if (useCounts[numericItemId] != null) {
+        return Math.max(0, Number(useCounts[numericItemId]) || 0);
+    }
+    // 旧形式のセーブデータは解禁済みアイテムを1回使用済みとして扱う
+    return (this._unlockedEquipSlotItemIds || []).includes(numericItemId) ? 1 : 0;
+};
+
+/**
+ * ●装備スロット解禁アイテムを使用可能か
+ */
+Game_Actor.prototype.canUseEquipSlotUnlockItem = function(itemId) {
+    const config = pEquipSlotUnlockItems.find(entry => entry.itemId === Number(itemId));
+    return !!config && this.equipSlotUnlockItemUseCount(itemId) < config.maxUses;
+};
+
+/**
+ * ●装備スロット解禁アイテムを使用
+ */
+Game_Actor.prototype.useEquipSlotUnlockItem = function(itemId) {
+    const config = pEquipSlotUnlockItems.find(entry => entry.itemId === Number(itemId));
+    if (!config || !this.canUseEquipSlotUnlockItem(itemId)) {
+        return false;
+    }
+    if (!this._equipSlotUnlockUseCounts) {
+        this._equipSlotUnlockUseCounts = {};
+        for (const usedItemId of this._unlockedEquipSlotItemIds || []) {
+            this._equipSlotUnlockUseCounts[usedItemId] = 1;
+        }
+    }
+    this._equipSlotUnlockUseCounts[config.itemId] = this.equipSlotUnlockItemUseCount(config.itemId) + 1;
+    this.refresh();
+    return true;
+};
+
+/**
+ * ●装備スロット解禁アイテムの設定を取得
+ */
+function equipSlotUnlockConfig(item) {
+    if (!item || !DataManager.isItem(item)) {
+        return null;
+    }
+    return pEquipSlotUnlockItems.find(config => config.itemId === item.id) || null;
+}
+
+// 解禁アイテムに通常の効果がなくても、対象アクターに使用可能にする
+const _Game_Action_testApply = Game_Action.prototype.testApply;
+Game_Action.prototype.testApply = function(target) {
+    const config = equipSlotUnlockConfig(this.item());
+    if (config && target && target.isActor && target.isActor()
+            && target.canUseEquipSlotUnlockItem(config.itemId)) {
+        return true;
+    }
+    return _Game_Action_testApply.apply(this, arguments);
+};
+
+// 使用成功時に対象アクターへスロットを恒久追加する
+const _Game_Action_apply = Game_Action.prototype.apply;
+Game_Action.prototype.apply = function(target) {
+    _Game_Action_apply.apply(this, arguments);
+    const config = equipSlotUnlockConfig(this.item());
+    if (config && target && target.isActor && target.isActor()
+            && target.result().isHit()) {
+        target.useEquipSlotUnlockItem(config.itemId);
+    }
 };
 
 /**

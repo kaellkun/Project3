@@ -31,7 +31,7 @@
     const pluginName = "BattleRetryOnPartyDeath";
     const parameters = PluginManager.parameters(pluginName);
     const innCommonEventId = Number(parameters["innCommonEventId"] || 5);
-    const innMapVariableId = 20;
+    const innMapVariableId = 21;
 
     const hasInnMap = () => $gameVariables.value(innMapVariableId) !== 0;
 
@@ -74,6 +74,10 @@
     };
 
     class Window_BattleRetryCommand extends Window_Command {
+        maxCols() {
+            return hasInnMap() ? 3 : 2;
+        }
+
         makeCommandList() {
             this.addCommand("リトライ", "retry");
             if (hasInnMap()) {
@@ -93,9 +97,8 @@
     };
 
     Scene_Gameover.prototype.createBattleRetryWindow = function() {
-        const width = 360;
-        const commandCount = hasInnMap() ? 3 : 2;
-        const height = this.calcWindowHeight(commandCount, true);
+        const width = Math.min(768, Graphics.boxWidth - 48);
+        const height = this.calcWindowHeight(1, true);
         const rect = new Rectangle(
             (Graphics.boxWidth - width) / 2,
             Graphics.boxHeight - height - 48,

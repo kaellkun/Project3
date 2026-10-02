@@ -131,11 +131,16 @@ for (const flexible of [false, true]) {
     test(`menu, battle, save, profile and skill-learning heights agree (flexible=${flexible})`, () => {
         setup({}, flexible)(`
             for (const type of [Scene_Item, Scene_Skill, Scene_Equip, Scene_Shop,
-                Scene_Battle, Scene_LearnSkillList]) {
+                Scene_LearnSkillList]) {
                 const scene = Object.create(type.prototype);
                 assert.equal(scene.helpAreaHeight(), 132, type.name);
                 assert.equal(scene.helpWindowRect().height, 132, type.name);
             }
+            const battle = Object.create(Scene_Battle.prototype);
+            assert.equal(battle.helpAreaHeight(), 168);
+            const battleHelpRect = battle.helpWindowRect();
+            assert.equal(battleHelpRect.height, 168);
+            assert.equal(new Window_Help(battleHelpRect).height, 168);
             for (const type of [Scene_Save, Scene_Load]) {
                 const scene = Object.create(type.prototype);
                 const rect = scene.helpWindowRect();
@@ -159,7 +164,7 @@ for (const flexible of [false, true]) {
 }
 
 for (const [width, height] of [[816, 624], [480, 816], [1280, 720]]) {
-    test(`battle relayout keeps three rows and avoids list overlap at ${width}x${height}`, () => {
+    test(`battle relayout keeps four help rows and avoids list overlap at ${width}x${height}`, () => {
         setup()(`
             Object.assign(Graphics, { width: ${width}, boxWidth: ${width},
                 height: ${height}, boxHeight: ${height} });
@@ -167,12 +172,15 @@ for (const [width, height] of [[816, 624], [480, 816], [1280, 720]]) {
             const rect = scene.helpWindowRect();
             scene._helpWindow = new Window_Help(rect);
             scene.relayoutBattleWindows();
-            assert.equal(scene._helpWindow.height, 132);
-            assert.equal(scene._helpWindow.y, rect.y);
-            assert.equal(scene._helpWindow.contents.height, 108);
+            assert.equal(scene._helpWindow.height, 168);
+            assert.equal(scene._helpWindow.y, 0);
+            assert.equal(scene._helpWindow.contents.height, 144);
+            scene._helpWindow.setText('一\\n二\\n三\\nXキー：戻る');
+            assert.equal(scene._helpWindow.contents.draws.at(-1).y, 108,
+                'the X-key hint fits on the fourth battle-help row');
             const list = scene.skillWindowRect();
-            assert.ok(list.y + list.height <= rect.y);
-            assert.ok(rect.y + rect.height <= scene.statusWindowRect().y);
+            assert.equal(list.y, scene._helpWindow.height);
+            assert.equal(list.y + list.height, ${height});
             assert.ok(list.height > 0);
         `);
     });

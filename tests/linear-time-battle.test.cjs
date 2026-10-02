@@ -273,6 +273,7 @@ function setup(parameters = {}, { keke = false, plugin = true, topUi = true } = 
         }
         function createTimeline() {
             const scene = new Scene_Battle();
+            SceneManager._scene = scene;
             scene.createAllWindows();
             return { scene, window: scene._linearTimeOrderWindow };
         }
@@ -664,27 +665,35 @@ test('sampled shared clock gives both sides the same installed Keke multiplier w
     `);
 });
 
-test('Window_Base subclass reserves layout once across nested rectangles and relayout', () => {
+test('action-order window is vertical on the right and does not reserve list space', () => {
     setup()(`
         const { scene, window } = createTimeline();
         assert.ok(window instanceof Window_Base);
         assert.equal(scene.createdBaseWindows, true);
-        assert.equal(window.x, 0);
-        assert.equal(window.y, 60);
-        assert.equal(window.height, 64);
+        assert.equal(window.x, Graphics.boxWidth - 64);
+        assert.equal(window.y, 0);
+        assert.equal(window.width, 64);
+        assert.equal(window.height, 8 * 48 + 16);
         assert.equal(window.padding, 8);
-        assert.equal(window.width, 8 * 48 + 16, 'compact: only as wide as the preview chips');
-        assert.ok(window.width < Graphics.boxWidth / 2);
+        assert.ok(window.height > window.width, 'order chips stack vertically');
         for (const method of ['skillWindowRect', 'itemWindowRect', 'enemyWindowRect']) {
             const rect = scene[method]();
-            assert.equal(rect.y, 124);
-            assert.equal(rect.y + rect.height, 420, 'original list bottom is retained');
-            assert.equal(scene._linearTimeRectDepth, 0);
+            assert.equal(rect.y, 60);
+            assert.equal(rect.y + rect.height, 420, 'list geometry is not reduced for the timeline');
         }
         assert.equal(scene.logWindowRect().height, 60);
+        assert.equal(scene.logWindowRect().width, Math.min(Graphics.boxWidth / 2, Graphics.boxWidth - 64),
+            'battle log stays left of the action-order column and clears the field center');
         scene.relayoutBattleWindows();
-        assert.equal(scene._logWindow.y, 124);
-        assert.equal(window.y + window.height, scene._logWindow.y, 'timeline and log touch with no gap');
+        assert.equal(scene._logWindow.y, 0);
+        window.update();
+        assert.equal(window.visible, true);
+        scene._skillWindow = { visible: true, active: true };
+        window.update();
+        assert.equal(window.visible, false, 'full-screen selection list takes visual priority');
+        scene._skillWindow.active = false;
+        window.update();
+        assert.equal(window.visible, true);
     `);
 });
 
@@ -693,11 +702,12 @@ test('layout without top UI, narrow screen and ShowTimeline=false', () => {
         Graphics.boxWidth = 320;
         const { scene, window } = createTimeline();
         assert.equal(window.y, 0);
-        assert.equal(window.width, 6 * 48 + 16);
+        assert.equal(window.width, 64);
+        assert.equal(window.height, 8 * 48 + 16);
         assert.ok(window.x + window.width <= Graphics.boxWidth);
-        assert.equal(scene.skillWindowRect().y, 64);
+        assert.equal(scene.skillWindowRect().y, 60);
         window.update();
-        assert.equal(window._portraits.length, 6);
+        assert.equal(window._portraits.length, 8);
     `);
     setup({ ShowTimeline: 'false' })(`
         const { scene, window } = createTimeline();

@@ -154,8 +154,8 @@ test('MPP log sprites display the recreated contents after FlexibleTopDownUI rel
         const scene = battleScene();
         const log = scene._logWindow;
         assert.ok(log._logSprites.length >= 3, 'MPP line sprites exist');
-        assert.notEqual(log.height, Window_BattleLog.prototype.windowHeight.call(log),
-            'layout plugin changed the log height, so contents were recreated');
+        assert.notEqual(log.width, Graphics.boxWidth,
+            'layout plugin narrows the log to keep the battlefield center clear');
         for (const sprite of log._logSprites) {
             assert.equal(sprite.bitmap, log.contents, 'line sprite shows the current contents bitmap');
             assert.equal(sprite.bitmap.destroyed, false);
@@ -169,7 +169,7 @@ test('line sprite frames follow the new line rectangles and the y-position of th
     setup().run(`
         const scene = battleScene();
         const log = scene._logWindow;
-        assert.equal(log.y, scene.battleCommandHeight(), 'log sits below the command row');
+        assert.equal(log.y, 0, 'log stays at the upper-left, clear of the bottom actor command row');
         log._logSprites.forEach((sprite, i) => {
             const rect = log.lineRect(i);
             assert.deepEqual(sprite.frame, { x: rect.x, y: rect.y, width: rect.width, height: rect.height });

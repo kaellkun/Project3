@@ -11,15 +11,20 @@ function swellTypeJson(entries) {
     return JSON.stringify(entries.map(entry => JSON.stringify(entry)));
 }
 
-function setup({ swellTypes = [], withShieldBreak = true } = {}) {
+function setup({ swellTypes = [], withShieldBreak = true, parameters = {} } = {}) {
     const variables = {};
     const switches = {};
-    const calls = { forceAction: [], originalMakeActions: 0, originalEndAction: 0, displayAffectedStatus: [], invokeAttempted: [], invokeApplied: [] };
+    const messages = [];
+    const log = [];
+    let logBusy = false;
+    let inBattle = true;
+    const calls = { forceAction: [], originalMakeActions: 0, originalEndAction: 0, displayAffectedStatus: [], invokeAttempted: [], invokeApplied: [], originalApply: 0 };
 
     function Game_Enemy() {}
     Game_Enemy.prototype.enemy = function() {
         return this._enemyData;
     };
+    Game_Enemy.prototype.name = function() { return this._enemyData.name; };
     Game_Enemy.prototype.setup = function() {};
     Game_Enemy.prototype.transform = function() {};
     Game_Enemy.prototype.revive = function() {};
@@ -49,6 +54,9 @@ function setup({ swellTypes = [], withShieldBreak = true } = {}) {
     Game_Enemy.prototype.setHp = function(hp) {
         this._hp = hp;
     };
+    Game_Enemy.prototype.result = function() {
+        return this._result || { isHit: () => false };
+    };
     if (withShieldBreak) {
         Game_Enemy.prototype._broken = false;
         Game_Enemy.prototype.isShieldBroken = function() {
@@ -64,12 +72,33 @@ function setup({ swellTypes = [], withShieldBreak = true } = {}) {
         };
     }
 
+    function Game_Action(subject) {
+        this._subject = subject;
+    }
+    Game_Action.prototype.apply = function() {
+        calls.originalApply++;
+    };
+    Game_Action.prototype.subject = function() {
+        return this._subject;
+    };
+    Game_Action.prototype.isHpEffect = function() {
+        return true;
+    };
+    Game_Action.prototype.item = function() {
+        return this._item;
+    };
+
     const battleManager = {
         _subject: null,
         _action: null,
         _logWindow: {
-            displayAffectedStatus(target) { calls.displayAffectedStatus.push(target); }
+            displayAffectedStatus(target) { calls.displayAffectedStatus.push(target); },
+            push(...args) { log.push(args); },
+            isBusy() { return logBusy; }
         },
+        initMembers() {},
+        update() { calls.originalUpdate = (calls.originalUpdate || 0) + 1; },
+        isBusy() { return messages.length > 0 || logBusy; },
         endAction() { calls.originalEndAction++; },
         // Mirrors ShieldBreakSystem.invokeAction: skip entirely while the subject is broken.
         invokeAction(subject, target) {
@@ -83,8 +112,16 @@ function setup({ swellTypes = [], withShieldBreak = true } = {}) {
 
     const context = vm.createContext({
         Game_Enemy,
+        Game_Action,
         BattleManager: battleManager,
-        PluginManager: { parameters: () => ({ SwellTypes: swellTypeJson(swellTypes) }) },
+        $dataSkills: { 99: { name: '爆発' }, 32: { name: '自爆' } },
+        $dataSystem: { elements: { 4: '雷' } },
+        $gameParty: { inBattle: () => inBattle },
+        $gameMessage: {
+            isBusy: () => messages.length > 0,
+            add: text => messages.push(text)
+        },
+        PluginManager: { parameters: () => ({ SwellTypes: swellTypeJson(swellTypes), ...parameters }) },
         $gameVariables: {
             value: id => variables[id] || 0,
             setValue: (id, value) => { variables[id] = value; }
@@ -92,20 +129,32 @@ function setup({ swellTypes = [], withShieldBreak = true } = {}) {
         $gameSwitches: {
             value: id => !!switches[id],
             setValue: (id, value) => { switches[id] = value; }
-        }
+        },
+        $gameTemp: {}
     });
     vm.runInContext(pluginSource, context, { filename: 'EnemySwellSystem.js' });
+
+    function makeAction({ subject = {}, elementId = 1, type = 1 } = {}) {
+        const action = Object.create(context.Game_Action.prototype);
+        action._subject = subject;
+        action._item = { damage: { elementId, type } };
+        action.subject = () => subject;
+        action.item = () => action._item;
+        action.isHpEffect = () => true;
+        return action;
+    }
 
     function makeEnemy(meta = {}) {
         const enemy = Object.create(context.Game_Enemy.prototype);
         enemy._enemyId = 1;
-        enemy._enemyData = { meta };
+        enemy._enemyData = { name: 'ボム', meta };
         enemy._hp = 100;
         enemy.setup();
         return enemy;
     }
 
-    return { context, variables, switches, calls, makeEnemy, battleManager };
+    return { context, variables, switches, calls, makeEnemy, makeAction, battleManager, messages, log,
+        setLogBusy(value) { logBusy = value; }, setInBattle(value) { inBattle = value; } };
 }
 
 test('an enemy without the note tag has no swell', () => {
@@ -369,6 +418,210 @@ test('self-destruct invokeAction bypass is a no-op when the enemy is not broken'
     battleManager.invokeAction(enemy, target);
 
     assert.deepEqual(calls.invokeApplied, [target]);
+});
+
+test('a matching-element hit that deals HP damage adds the trigger amount to swell', () => {
+    const { makeEnemy, variables, makeAction } = setup({
+        swellTypes: [{ Key: '肥大化', VariableId: 20, PerTurn: 0, Max: 0, TriggerElements: '2,4', TriggerAmount: 2 }]
+    });
+    const enemy = makeEnemy({ '膨張': '肥大化' });
+    enemy._result = { isHit: () => true, hpAffected: true, hpDamage: 10 };
+    const action = makeAction({ elementId: 4 });
+
+    action.apply(enemy);
+
+    assert.equal(variables[20], 2);
+});
+
+test('a non-matching element does not add swell', () => {
+    const { makeEnemy, makeAction } = setup({
+        swellTypes: [{ Key: '肥大化', VariableId: 21, PerTurn: 0, Max: 0, TriggerElements: '2,4', TriggerAmount: 2 }]
+    });
+    const enemy = makeEnemy({ '膨張': '肥大化' });
+    enemy._result = { isHit: () => true, hpAffected: true, hpDamage: 10 };
+    const action = makeAction({ elementId: 11 });
+
+    action.apply(enemy);
+
+    assert.equal(enemy.swellValue(), 0);
+});
+
+test('a miss, non-HP-affecting, or non-positive-damage hit does not add swell even with a matching element', () => {
+    const { makeEnemy, variables, makeAction } = setup({
+        swellTypes: [{ Key: '肥大化', VariableId: 22, PerTurn: 0, Max: 0, TriggerElements: '4', TriggerAmount: 2 }]
+    });
+    const enemy = makeEnemy({ '膨張': '肥大化' });
+    const action = makeAction({ elementId: 4 });
+
+    enemy._result = { isHit: () => false, hpAffected: true, hpDamage: 10 };
+    action.apply(enemy);
+    assert.equal(enemy.swellValue(), 0, 'missed');
+
+    enemy._result = { isHit: () => true, hpAffected: false, hpDamage: 10 };
+    action.apply(enemy);
+    assert.equal(enemy.swellValue(), 0, 'no hp effect');
+
+    enemy._result = { isHit: () => true, hpAffected: true, hpDamage: 0 };
+    action.apply(enemy);
+    assert.equal(enemy.swellValue(), 0, 'zero damage');
+});
+
+test('element-triggered swell respects the Max clamp and switch, and is skipped while shield-broken', () => {
+    const { makeEnemy, variables, switches, makeAction } = setup({
+        swellTypes: [{ Key: '肥大化', VariableId: 23, PerTurn: 0, Max: 3, SwitchId: 5, TriggerElements: '4', TriggerAmount: 2 }]
+    });
+    const enemy = makeEnemy({ '膨張': '肥大化' });
+    enemy._result = { isHit: () => true, hpAffected: true, hpDamage: 10 };
+    const action = makeAction({ elementId: 4 });
+
+    action.apply(enemy);
+    assert.equal(variables[23], 2);
+    assert.equal(switches[5], false);
+
+    action.apply(enemy);
+    assert.equal(variables[23], 3, 'clamped to the max');
+    assert.equal(switches[5], true);
+
+    enemy._broken = true;
+    variables[23] = 0;
+    action.apply(enemy);
+    assert.equal(variables[23], 0, 'no accumulation while shield-broken');
+});
+
+test('per-enemy note tags override the trigger elements and amount', () => {
+    const { makeEnemy, variables, makeAction } = setup({
+        swellTypes: [{ Key: '肥大化', VariableId: 24, PerTurn: 0, Max: 0, TriggerElements: '4', TriggerAmount: 2 }]
+    });
+    const enemy = makeEnemy({ '膨張': '肥大化', '膨張属性': '11', '膨張属性増加': '5' });
+    enemy._result = { isHit: () => true, hpAffected: true, hpDamage: 10 };
+
+    makeAction({ elementId: 4 }).apply(enemy);
+    assert.equal(enemy.swellValue(), 0, 'the overridden trigger no longer matches the original element');
+
+    makeAction({ elementId: 11 }).apply(enemy);
+    assert.equal(enemy.swellValue(), 5, 'uses the overridden element and amount');
+});
+
+test('an enemy without TriggerElements configured is unaffected by any element hit', () => {
+    const { makeEnemy, variables, makeAction } = setup({
+        swellTypes: [{ Key: '肥大化', VariableId: 25, PerTurn: 0, Max: 0 }]
+    });
+    const enemy = makeEnemy({ '膨張': '肥大化' });
+    enemy._result = { isHit: () => true, hpAffected: true, hpDamage: 10 };
+
+    makeAction({ elementId: 1 }).apply(enemy);
+
+    assert.equal(enemy.swellValue(), 0);
+});
+
+test('progress forecasts the skill and remaining actions in both log and message window', () => {
+    const { makeEnemy, log, messages, battleManager } = setup({
+        swellTypes: [{ Key: 'ボム', VariableId: 3, PerTurn: 1, Max: 3, ForceSkillId: 32 }]
+    });
+    makeEnemy({ '膨張': 'ボム' }).onTurnEnd();
+    const expected = 'ボムが膨張！ 1/3。自爆まで2回の行動終了！\n行動終了ごと+1';
+    assert.deepEqual(log.at(-1), ['addText', '行動終了ごと+1']);
+    assert.equal(battleManager.isBusy(), true, 'pending notice pauses the next action');
+    battleManager.update();
+    assert.deepEqual(messages, [expected]);
+    assert.equal(battleManager.isBusy(), true, 'battle waits for the message');
+    messages.shift();
+    assert.equal(battleManager.isBusy(), false);
+});
+
+test('rapid progress coalesces pending messages after the battle log finishes', () => {
+    const { makeEnemy, makeAction, battleManager, messages, log, setLogBusy } = setup({
+        swellTypes: [{ Key: 'ボム', VariableId: 3, PerTurn: 1, Max: 3, ForceSkillId: 32,
+            TriggerElements: '4', TriggerAmount: 1 }]
+    });
+    const enemy = makeEnemy({ '膨張': 'ボム' });
+    enemy._result = { isHit: () => true, hpAffected: true, hpDamage: 10 };
+    setLogBusy(true);
+    enemy.onTurnEnd();
+    makeAction({ elementId: 4 }).apply(enemy);
+    battleManager.update();
+    assert.equal(messages.length, 0);
+    assert.equal(log.length, 4, 'both two-line progress steps remain in the battle log');
+    setLogBusy(false);
+    battleManager.update();
+    assert.deepEqual(messages, ['ボムが膨張！ 2/3。自爆まで1回の行動終了！\n行動終了ごと+1／雷被弾で+1']);
+});
+
+test('limit and break reset notify the next skill and its cancellation', () => {
+    const { makeEnemy, battleManager, messages, log } = setup({
+        swellTypes: [{ Key: 'ボム', VariableId: 3, PerTurn: 1, Max: 2, ForceSkillId: 32,
+            ResetOnBreak: true }]
+    });
+    const enemy = makeEnemy({ '膨張': 'ボム' });
+    enemy.onTurnEnd();
+    enemy.onTurnEnd();
+    assert.deepEqual(log.at(-1), ['addText', 'ボムの膨張が限界！ 次の行動で自爆を使う！']);
+    battleManager.update();
+    assert.deepEqual(messages, ['ボムの膨張が限界！ 次の行動で自爆を使う！']);
+    messages.shift();
+    enemy.damageShield(999);
+    battleManager.update();
+    assert.deepEqual(messages, ['ボムはブレイクされ、膨張がリセットされた！']);
+});
+
+test('pending notice waits until an existing event message finishes', () => {
+    const { makeEnemy, battleManager, messages } = setup({
+        swellTypes: [{ Key: 'ボム', VariableId: 3, PerTurn: 1, Max: 2, ForceSkillId: 32 }]
+    });
+    messages.push('イベント文章');
+    makeEnemy({ '膨張': 'ボム' }).onTurnEnd();
+    battleManager.update();
+    assert.deepEqual(messages, ['イベント文章']);
+    messages.shift();
+    battleManager.update();
+    assert.match(messages[0], /自爆/);
+});
+
+test('disabled formats and battle-external updates show no notices', () => {
+    const { makeEnemy, log, messages, battleManager, setInBattle } = setup({
+        swellTypes: [{ Key: 'ボム', VariableId: 3, PerTurn: 1, Max: 3, ForceSkillId: 32 }],
+        parameters: { ProgressFormat: '', ReadyFormat: '', ResetFormat: '' }
+    });
+    const enemy = makeEnemy({ '膨張': 'ボム' });
+    enemy.onTurnEnd();
+    enemy.setSwellValue(1);
+    setInBattle(false);
+    enemy.setSwellValue(2);
+    battleManager.update();
+    assert.deepEqual(log, []);
+    assert.deepEqual(messages, []);
+});
+
+test('zero per-turn gain shows an element-dependent forecast', () => {
+    const { makeEnemy, log } = setup({
+        swellTypes: [{ Key: 'ボム', VariableId: 3, PerTurn: 0, Max: 3, ForceSkillId: 32,
+            TriggerElements: '4', TriggerAmount: 1 }]
+    });
+    makeEnemy({ '膨張': 'ボム' }).advanceSwellByElements([4]);
+    assert.deepEqual(log.at(-2), ['addText', 'ボムが膨張！ 1/3。自爆まで属性被弾が必要！']);
+    assert.deepEqual(log.at(-1), ['addText', '雷被弾で+1']);
+});
+
+test('custom mechanic hint overrides the automatically generated hint', () => {
+    const { makeEnemy, messages, battleManager } = setup({
+        swellTypes: [{ Key: 'ボム', VariableId: 3, PerTurn: 1, Max: 3, ForceSkillId: 32,
+            NoticeHint: '水を浴びると鎮火する' }]
+    });
+    makeEnemy({ '膨張': 'ボム' }).onTurnEnd();
+    battleManager.update();
+    assert.match(messages[0], /水を浴びると鎮火する/);
+});
+
+test('a swell type without a forced skill does not announce a nonexistent action', () => {
+    const { makeEnemy, log, messages, battleManager } = setup({
+        swellTypes: [{ Key: '蓄積', VariableId: 3, PerTurn: 1, Max: 2, ForceSkillId: 0 }]
+    });
+    const enemy = makeEnemy({ '膨張': '蓄積' });
+    enemy.onTurnEnd();
+    enemy.onTurnEnd();
+    battleManager.update();
+    assert.deepEqual(messages, ['ボムの膨張が限界！']);
+    assert.deepEqual(log.at(-1), ['addText', 'ボムの膨張が限界！']);
 });
 
 

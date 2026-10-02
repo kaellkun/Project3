@@ -61,7 +61,7 @@ function buildContext(parameters = {}) {
         SoundManager: { playBattleStart() {} },
         SceneManager: { goto(sceneClass) { destinations.push(sceneClass); } },
         $gameTemp: { reserveCommonEvent(id) { this.reservedCommonEventId = id; } }
-        ,$gameVariables: { value() { return 1; } }
+        ,$gameVariables: { value(id) { return id === 21 ? 11 : 0; } }
     };
     vm.runInNewContext(pluginSource, context);
     return { context, destinations, extracted };
@@ -91,6 +91,11 @@ test("game over shows exactly the three requested choices without intermediate m
         scene._window._commands.map(command => command.symbol),
         ["retry", "inn", "title"]
     );
+    assert.equal(scene._window.maxCols(), 3);
+    assert.equal(scene._window._commands.length, scene._window.maxCols());
+    assert.equal(scene._window.rect.width, 768);
+    assert.equal(scene._window.rect.x, 24);
+    assert.equal(scene._window.rect.height, 36);
 });
 
 test("retry restores the pre-battle save and restarts the same troop", () => {
@@ -118,9 +123,9 @@ test("inn choice restores state and reserves the configured common event", () =>
     assert.equal(destinations.at(-1), context.Scene_Map);
 });
 
-test("inn choice is hidden when the inn map variable is zero", () => {
+test("inn choice is hidden when only an unrelated variable has a value", () => {
     const { context } = buildContext();
-    context.$gameVariables.value = () => 0;
+    context.$gameVariables.value = id => id === 20 ? 11 : 0;
     context.BattleManager.setup(4, false, false);
     const scene = new context.Scene_Gameover();
     scene.create();
@@ -129,6 +134,9 @@ test("inn choice is hidden when the inn map variable is zero", () => {
         scene._window._commands.map(command => command.symbol),
         ["retry", "title"]
     );
+    assert.equal(scene._window.maxCols(), 2);
+    assert.equal(scene._window._commands.length, scene._window.maxCols());
+    assert.equal(scene._window.rect.height, 36);
 });
 
 test("title choice clears retry state and returns to the title", () => {

@@ -721,18 +721,6 @@
         rect.height += delta;
         return rect;
     };
-    const _Scene_Battle_helpWindowRect = Scene_Battle.prototype.helpWindowRect;
-    Scene_Battle.prototype.helpWindowRect = function() {
-        const rect = _Scene_Battle_helpWindowRect.call(this);
-        rect.y -= this.formationStatusDelta();
-        return rect;
-    };
-    const _Scene_Battle_skillWindowRect = Scene_Battle.prototype.skillWindowRect;
-    Scene_Battle.prototype.skillWindowRect = function() {
-        const rect = _Scene_Battle_skillWindowRect.call(this);
-        rect.height = Math.max(1, rect.height - this.formationStatusDelta());
-        return rect;
-    };
     // FlexibleTopDownUI re-applies hardcoded heights after create; follow it.
     const _Scene_Battle_relayout = Scene_Battle.prototype.relayoutBattleWindows;
     if (_Scene_Battle_relayout) {
@@ -1015,7 +1003,8 @@
     };
 
     Scene_Battle.prototype.createBattleFormationWindows = function() {
-        const top = this.skillWindowRect().y;
+        // The regular help window is hidden in formation mode; reclaim its top strip.
+        const top = 0;
         const bottom = this.statusWindowRect().y;
         const available = bottom - top;
         const helpH = 56;

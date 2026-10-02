@@ -4,7 +4,7 @@
 
 /*:
  * @target MZ
- * @plugindesc 敵の「膨張」をシステム変数で管理します。毎ターン加算、上限到達で強制行動・スイッチON、シールドブレイクで解除。自爆スキルタグ対応。(v1.2.1)
+ * @plugindesc 敵の膨張を管理し、発動予告をログと文章ウィンドウに表示します。(v1.4.0)
  * @author Copilot
  * @orderAfter ShieldBreakSystem
  *
@@ -16,6 +16,9 @@
  *
  * ・膨張タイプごとに、値を保持する変数と毎ターンの加算量、
  * 　上限値、上限到達時にONにするスイッチを設定できます。
+ * ・特定属性の攻撃を受けた時にも追加で加算できます
+ * 　（Keke_ElementFullCustom導入時は「属性追加」で合成された
+ * 　全属性も判定に含めます）。シールドブレイク中は加算されません。
  * ・上限値に達している間はスイッチがON、それ以外はOFFになります
  * 　（上限0は無制限で加算するだけ・スイッチ操作なし）。
  * ・上限に達すると、その敵の次の行動を指定スキル（自爆など）に
@@ -23,6 +26,11 @@
  * ・その敵のシールドがブレイクした瞬間（ShieldBreakSystem導入時）に
  * 　膨張を0にリセットできます（タイプごとにON/OFF可）。
  * ・シールドブレイク中は膨張が加算されません。
+ * ・戦闘中の膨張進行・限界到達・ブレイク解除をログと文章ウィンドウに
+ * 　表示します。進行時に属性被弾やブレイク解除の条件も表示します。
+ * 　残り回数は毎ターンの増加量を基にした目安です。
+ * 　属性被弾による増加で早まる場合は、その都度予告を更新します。
+ * 　限界到達後は「次の行動」で指定スキルを使用します。
  * ・膨張で自爆を決定した後、同じターン中にその敵自身がブレイクしても、
  * 　<膨張>タグ付きスキルのダメージはShieldBreakSystemの「ブレイク中は
  * 　行動無効」処理を回避して必ず命中します（抑えられた自爆がパーティに
@@ -33,6 +41,8 @@
  *   <膨張速度:N>        … その敵だけ毎ターンの加算量を上書き（省略可）
  *   <膨張上限:N>        … その敵だけ上限値を上書き（省略可）
  *   <膨張スキル:N>      … その敵だけ強制発動スキルIDを上書き（省略可）
+ *   <膨張属性:2,4>      … その敵だけ被弾で加算する属性IDを上書き（省略可）
+ *   <膨張属性増加:N>    … その敵だけ属性被弾時の加算量を上書き（省略可）
  *
  * 同じキー名を複数の敵に指定すると、変数とスイッチを共有します。
  * 群れで自爆する敵同士の連動（誰かが膨張したら皆に影響する等）も
@@ -52,6 +62,24 @@
  * @desc 敵のメモ欄 <膨張:キー名> で参照する定義の一覧です。
  * @type struct<SwellType>[]
  * @default []
+ *
+ * @param ProgressFormat
+ * @text 膨張進行の予告
+ * @desc %1=敵名 %2=現在値 %3=上限 %4=スキル名 %5=残り目安 %6=ギミック説明。\nで改行。空欄で非表示。
+ * @type string
+ * @default %1が膨張！ %2/%3。%4まで%5！\n%6
+ *
+ * @param ReadyFormat
+ * @text 膨張限界の予告
+ * @desc %1=敵名 %2=現在値 %3=上限 %4=スキル名。空欄で非表示。
+ * @type string
+ * @default %1の膨張が限界！ 次の行動で%4を使う！
+ *
+ * @param ResetFormat
+ * @text ブレイク解除の予告
+ * @desc %1=敵名 %2=現在値 %3=上限 %4=スキル名。空欄で非表示。
+ * @type string
+ * @default %1はブレイクされ、膨張がリセットされた！
  */
 /*~struct~SwellType:
  * @param Key
@@ -90,11 +118,30 @@
  * @type skill
  * @default 0
  *
+ * @param TriggerElements
+ * @text 被弾で加算する属性
+ * @desc この属性の攻撃が命中しHPダメージを与えた時、追加で膨張を加算します。カンマ区切り、空欄で無効。
+ * @type string
+ * @default
+ *
+ * @param TriggerAmount
+ * @text 属性被弾時の加算量
+ * @desc TriggerElementsに一致した1ヒットごとの加算量。
+ * @type number
+ * @min 0
+ * @default 1
+ *
  * @param ResetOnBreak
  * @text ブレイクで解除
  * @desc シールドブレイクが発生した瞬間に膨張を0へ戻すか。
  * @type boolean
  * @default true
+ *
+ * @param NoticeHint
+ * @text ギミック説明
+ * @desc 予告に表示する説明。空欄では毎ターン増加量・属性被弾増加量・ブレイク条件から自動生成。
+ * @type string
+ * @default
  */
 
 (() => {
@@ -102,6 +149,71 @@
 
     const pluginName = "EnemySwellSystem";
     const parameters = PluginManager.parameters(pluginName);
+    const progressFormat = parameters.ProgressFormat === undefined ?
+        "%1が膨張！ %2/%3。%4まで%5！\\n%6" : parameters.ProgressFormat;
+    const readyFormat = parameters.ReadyFormat === undefined ?
+        "%1の膨張が限界！ 次の行動で%4を使う！" : parameters.ReadyFormat;
+    const resetFormat = parameters.ResetFormat === undefined ?
+        "%1はブレイクされ、膨張がリセットされた！" : parameters.ResetFormat;
+
+    function mechanicHint(swell) {
+        if (swell.noticeHint) return swell.noticeHint;
+        const hints = [];
+        if (swell.perTurn > 0) hints.push(`行動終了ごと+${swell.perTurn}`);
+        if (swell.triggerAmount > 0 && swell.triggerElements.length) {
+            const names = swell.triggerElements.map(id => $dataSystem?.elements[id] || `属性${id}`);
+            hints.push(`${names.join("・")}被弾で+${swell.triggerAmount}`);
+        }
+        if (swell.resetOnBreak) hints.push("ブレイクで解除");
+        return hints.join("／");
+    }
+
+    function formatNotice(format, enemy, value) {
+        const swell = enemy._swell;
+        const skill = $dataSkills[swell.forceSkillId];
+        const remaining = swell.perTurn > 0 && swell.max > 0 ?
+            `${Math.ceil((swell.max - value) / swell.perTurn)}回の行動終了` : "属性被弾が必要";
+        return String(format).replace(/%([1-6])/g, (_, index) =>
+            [enemy.name(), value, swell.max, skill ? skill.name : "膨張限界", remaining,
+                mechanicHint(swell)][Number(index) - 1]).replace(/\\n/g, "\n").trim();
+    }
+
+    function announceSwell(enemy, value) {
+        if (!$gameParty.inBattle() || !enemy.isAlive()) return;
+        const format = value === 0 ? resetFormat :
+            value >= enemy._swell.max && enemy._swell.max > 0 ?
+                enemy._swell.forceSkillId > 0 || !readyFormat ? readyFormat :
+                    "%1の膨張が限界！" : progressFormat;
+        if (!format) return;
+        const text = formatNotice(format, enemy, value);
+        if (BattleManager._logWindow) {
+            for (const line of text.split("\n")) BattleManager._logWindow.push("addText", line);
+        }
+        const notices = BattleManager._enemySwellNotices ||= [];
+        const existing = notices.findIndex(notice => notice.enemy === enemy);
+        if (existing >= 0) notices[existing].text = text;
+        else notices.push({ enemy, text });
+    }
+
+    const initMembers = BattleManager.initMembers;
+    BattleManager.initMembers = function() {
+        initMembers.apply(this, arguments);
+        this._enemySwellNotices = [];
+    };
+
+    const updateBattle = BattleManager.update;
+    BattleManager.update = function() {
+        const notices = this._enemySwellNotices;
+        if (notices?.length && !$gameMessage.isBusy() && !this._logWindow?.isBusy()) {
+            $gameMessage.add(notices.shift().text);
+        }
+        return updateBattle.apply(this, arguments);
+    };
+
+    const battleIsBusy = BattleManager.isBusy;
+    BattleManager.isBusy = function() {
+        return !!this._enemySwellNotices?.length || battleIsBusy.apply(this, arguments);
+    };
 
     function parseTypes(json) {
         let list = [];
@@ -121,7 +233,10 @@
                 max: Number(entry.Max) || 0,
                 switchId: Number(entry.SwitchId) || 0,
                 forceSkillId: Number(entry.ForceSkillId) || 0,
-                resetOnBreak: entry.ResetOnBreak === "true" || entry.ResetOnBreak === true
+                triggerElements: elementIds(entry.TriggerElements),
+                triggerAmount: Number(entry.TriggerAmount) || 0,
+                resetOnBreak: entry.ResetOnBreak === "true" || entry.ResetOnBreak === true,
+                noticeHint: String(entry.NoticeHint || "")
             });
         }
         return map;
@@ -134,6 +249,12 @@
         return Number.isFinite(n) ? n : fallback;
     }
 
+    function elementIds(value) {
+        if (typeof value !== "string" || !value.trim()) return [];
+        return [...new Set(value.split(/[,、\s]+/).map(Number))]
+            .filter(id => Number.isInteger(id) && id > 0);
+    }
+
     Game_Enemy.prototype.setupSwell = function() {
         const meta = (this.enemy() && this.enemy().meta) || {};
         const key = meta["膨張"] === undefined ? "" : String(meta["膨張"]).trim();
@@ -143,7 +264,10 @@
                   ...base,
                   perTurn: number(meta["膨張速度"], base.perTurn),
                   max: number(meta["膨張上限"], base.max),
-                  forceSkillId: number(meta["膨張スキル"], base.forceSkillId)
+                  forceSkillId: number(meta["膨張スキル"], base.forceSkillId),
+                  triggerElements: meta["膨張属性"] !== undefined ?
+                      elementIds(String(meta["膨張属性"])) : base.triggerElements,
+                  triggerAmount: number(meta["膨張属性増加"], base.triggerAmount)
               }
             : null;
     };
@@ -163,11 +287,13 @@
     Game_Enemy.prototype.setSwellValue = function(value) {
         if (!this.hasSwell()) return;
         const swell = this._swell;
+        const previous = this.swellValue();
         const clamped = swell.max > 0 ? Math.min(Math.max(value, 0), swell.max) : Math.max(value, 0);
         $gameVariables.setValue(swell.variableId, clamped);
         if (swell.switchId > 0) {
             $gameSwitches.setValue(swell.switchId, swell.max > 0 && clamped >= swell.max);
         }
+        if (clamped !== previous) announceSwell(this, clamped);
     };
 
     Game_Enemy.prototype.resetSwell = function() {
@@ -178,6 +304,14 @@
         if (!this.hasSwell() || this._swell.perTurn === 0) return;
         if (this.isShieldBroken && this.isShieldBroken()) return;
         this.setSwellValue(this.swellValue() + this._swell.perTurn);
+    };
+
+    // 一致する属性の攻撃がHPダメージを与えるたびに膨張を追加加算する。
+    Game_Enemy.prototype.advanceSwellByElements = function(elements) {
+        if (!this.hasSwell() || !this._swell.triggerElements.length || this._swell.triggerAmount === 0) return;
+        if (this.isShieldBroken && this.isShieldBroken()) return;
+        if (!elements.some(id => this._swell.triggerElements.includes(id))) return;
+        this.setSwellValue(this.swellValue() + this._swell.triggerAmount);
     };
 
     for (const name of ["setup", "transform", "revive", "onBattleEnd"]) {
@@ -253,6 +387,24 @@
             return invokeAction.apply(this, arguments);
         };
     }
+
+    // 特定属性の被弾で膨張を追加加算する（Keke_ElementFullCustom導入時は合成属性も判定）。
+    const applyAction = Game_Action.prototype.apply;
+    Game_Action.prototype.apply = function(target) {
+        applyAction.apply(this, arguments);
+        if (this._isTempApplyKe || target._isTempKe) return;
+        if (!target.isEnemy || !target.isEnemy() || !target.hasSwell || !target.hasSwell()) return;
+        const result = target.result();
+        if (!result.isHit() || !this.isHpEffect() || ![1, 5].includes(this.item().damage.type) ||
+            !result.hpAffected || result.hpDamage <= 0) return;
+        const elementId = this.item().damage.elementId;
+        const subject = this.subject();
+        const elements = typeof $gameTemp !== "undefined" && $gameTemp &&
+            typeof $gameTemp.getAllElementsKe === "function" ?
+            $gameTemp.getAllElementsKe(this) :
+            elementId < 0 ? subject.attackElements() : [elementId];
+        target.advanceSwellByElements(elements);
+    };
 
     // 自爆タグ付きスキルを使い終えた敵を、通常の戦闘不能演出・メッセージ付きで倒す。
     const endAction = BattleManager.endAction;

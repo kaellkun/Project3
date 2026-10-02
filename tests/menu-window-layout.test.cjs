@@ -289,7 +289,7 @@ test('real battle scene and timeline use the same expanded command bottom', () =
     run(`const BattleManager = {}; const $gameParty = {}; const SceneManager = {};`);
     // Isolate the installed layout adapters from unrelated battle services.
     const source = read('js/plugins/LinearTimeBattle.js');
-    run(`(() => { const enabled = () => true; const showTimeline = true;
+    run(`(() => { const enabled = () => true; const showTimeline = true; const previewCount = 8;
         ${source.slice(source.indexOf('    const cell = 48;'), source.indexOf('    const enemyLetter ='))}
     })();`);
     run(`
@@ -297,8 +297,69 @@ test('real battle scene and timeline use the same expanded command bottom', () =
         assertRowFits(windowFor(Window_PartyCommand, scene.partyCommandWindowRect(), 2));
         assertRowFits(windowFor(Window_ActorCommand, scene.actorCommandWindowRect(), 4));
         assert.equal(scene.battleCommandHeight(), 88);
-        assert.equal(scene.logWindowRect().y, 88 + 64, 'timeline sits flush below the command bar');
-        assert.equal(scene.skillWindowRect().y, scene.logWindowRect().y);
-        assert.equal(scene.skillWindowRect().y + scene.skillWindowRect().height, scene.helpWindowRect().y);
+        assert.equal(scene.actorCommandWindowRect().y + scene.actorCommandWindowRect().height,
+            scene.statusWindowRect().y, 'actor command sits directly above the status area');
+        assert.equal(scene.actorCommandWindowRect().y, 396);
+        assert.equal(scene.logWindowRect().y, 0, 'battle log remains in the upper-left');
+        assert.equal(scene.logWindowRect().width, Math.floor(Graphics.boxWidth * 0.5));
+        const helpRect = scene.helpWindowRect();
+        assert.equal(helpRect.y, 0, 'battle help is top-aligned');
+        for (const method of ['skillWindowRect', 'itemWindowRect', 'enemyWindowRect']) {
+            const rect = scene[method]();
+            assert.deepEqual([rect.x, rect.y, rect.width, rect.height],
+                [0, helpRect.height, 816, 624 - helpRect.height],
+                'battle selection lists begin below the help window and use all remaining space');
+        }
+        assert.equal(scene.skillWindowRect().y + scene.skillWindowRect().height, 624,
+            'skill list fills the space down to the screen bottom while the actor/status window is hidden');
+        const order = scene.linearTimeOrderWindowRect();
+        assert.deepEqual([order.x, order.y, order.width], [752, 0, 64],
+            'action order is a vertical column at the right edge');
+        assert.ok(order.height <= scene.actorCommandWindowRect().y);
+    `);
+});
+
+test('battle relayout keeps skill/item windows clear of the contextual help window', () => {
+    setup()(`
+        const scene = sceneFor(Scene_Battle);
+        scene._partyCommandWindow = panel();
+        scene._actorCommandWindow = panel();
+        scene._logWindow = panel();
+        scene._statusWindow = panel();
+        scene._helpWindow = panel();
+        scene._skillWindow = panel();
+        scene._itemWindow = panel();
+        scene._enemyWindow = panel();
+        scene.relayoutBattleWindows();
+        for (const win of [scene._skillWindow, scene._itemWindow]) {
+            assert.equal(win.y, scene._helpWindow.y + scene._helpWindow.height);
+            assert.equal(win.y + win.height, Graphics.boxHeight);
+        }
+        assert.equal(scene._helpWindow.y, 0);
+        assert.equal(scene._enemyWindow.y, scene._helpWindow.height);
+    `);
+});
+
+test('battle skill, item and enemy help include details and the X-key return hint', () => {
+    setup()(`
+        const makeHelp = () => ({
+            _text: '',
+            setItem(item) { this._text = item ? item.description : ''; },
+            setText(text) { this._text = text; }
+        });
+        for (const [Type, label] of [[Window_BattleSkill, 'スキル詳細'], [Window_BattleItem, 'アイテム詳細']]) {
+            const win = Object.create(Type.prototype);
+            win._helpWindow = makeHelp();
+            win.item = () => ({ description: label });
+            win.updateHelp();
+            assert.match(win._helpWindow._text, new RegExp(label));
+            assert.match(win._helpWindow._text, /Xキー：戻る/);
+        }
+        const enemy = Object.create(Window_BattleEnemy.prototype);
+        enemy._helpWindow = makeHelp();
+        enemy.enemy = () => ({ name: () => '選択中の敵' });
+        enemy.updateHelp();
+        assert.match(enemy._helpWindow._text, /選択中の敵/);
+        assert.match(enemy._helpWindow._text, /Xキー：戻る/);
     `);
 });

@@ -4,7 +4,7 @@
 
 /*:
  * @target MZ
- * @plugindesc ヘルプを3行に統一し、ヘルプ内だけ文字サイズを相対調整します。(v1.0.0)
+ * @plugindesc 通常ヘルプを3行、戦闘ヘルプを4行に調整します。(v1.0.0)
  * @author Copilot
  * @orderAfter FlexibleTopDownUI
  * @orderAfter NRP_LearnSkillList
@@ -19,7 +19,8 @@
  * @desc 通常フォントに対する倍率。85で85%、100で縮小なし。ヘルプ内だけに適用。
  *
  * @help
- * ヘルプウィンドウを標準の3行分の高さに統一します。
+ * 通常のヘルプウィンドウを標準の3行分の高さに統一します。
+ * 戦闘中は「Xキー：戻る」の案内用に4行分を確保します。
  * プラグイン管理で「ヘルプ文字サイズ倍率（%）」を設定してください。
  * ゲーム内オプションへの項目追加はありません。
  *
@@ -47,11 +48,14 @@
         ? Math.max(10, Math.min(100, rawRate)) / 100
         : 0.85;
     const lines = 3;
+    const battleLines = 4;
 
     const _Window_Help_initialize = Window_Help.prototype.initialize;
     Window_Help.prototype.initialize = function(rect) {
         // Set the final size before contents creation. Do not mutate the caller's rect.
-        const height = this.fittingHeight(lines);
+        let lineCount = rect.helpLineCount || lines;
+        while (this.fittingHeight(lineCount) < rect.height) lineCount++;
+        const height = this.fittingHeight(lineCount);
         _Window_Help_initialize.call(this, new Rectangle(rect.x, rect.y, rect.width, height));
     };
 
@@ -75,8 +79,12 @@
         return this.calcWindowHeight(lines, false);
     }
 
+    function battleHelpAreaHeight() {
+        return this.calcWindowHeight(battleLines, false);
+    }
+
     Scene_MenuBase.prototype.helpAreaHeight = helpAreaHeight;
-    Scene_Battle.prototype.helpAreaHeight = helpAreaHeight;
+    Scene_Battle.prototype.helpAreaHeight = battleHelpAreaHeight;
     Scene_Status.prototype.profileHeight = helpAreaHeight;
 
     // File scenes subtract the actual help height from their list area already.

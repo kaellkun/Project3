@@ -57,7 +57,7 @@
  * 反撃・強制行動・行動回数追加・行動不能は通常のMZ仕様を維持します。
  * 2倍は行動機会の頻度であり、スキルの攻撃ヒット数ではありません。
  *
- * UI: 上部コマンド下の小さなウィンドウに、左から近い順で表示。
+ * UI: 画面右端の小さな縦長ウィンドウに、上から近い順で表示。
  * 味方は歩行グラフィック、敵は戦闘画像と識別文字(A/B)です。
  * 青地=味方、赤地=敵。先頭は足踏みし、対象選択中は金枠になります。
  * 同じキャラも複数表示し、2回行動などが分かるようにします。
@@ -207,45 +207,38 @@
 
     const cell = 48;
     const pad = 8;
-    // Windows touch each other; the whole battle UI is laid out with zero gaps.
-    const gap = 0;
-    const barHeight = cell + pad * 2;
-    const hasTopUi = () => PluginManager._scripts.includes("FlexibleTopDownUI");
+    const columnWidth = cell + pad * 2;
     const timelineEnabled = () => enabled() && showTimeline;
-    const top = scene => hasTopUi()
-        ? (scene.battleCommandHeight ? scene.battleCommandHeight() : scene.calcWindowHeight(1, true)) + gap
-        : gap;
-    // Reserve space for lists as well as the battle log, rather than covering
-    // selectable rows. Existing bottom help/status locations remain unchanged.
-    for (const method of ["logWindowRect", "skillWindowRect", "itemWindowRect", "enemyWindowRect"]) {
-        const original = Scene_Battle.prototype[method];
-        // item/enemy can call skillWindowRect; nested wrappers must not shift twice.
-        Scene_Battle.prototype[method] = function() {
-            const nested = this._linearTimeRectDepth || 0;
-            this._linearTimeRectDepth = nested + 1;
-            let rect;
-            try { rect = original.call(this); } finally { this._linearTimeRectDepth = nested; }
-            if (!nested && timelineEnabled()) {
-                const bottom = rect.y + rect.height;
-                rect.y = Math.max(rect.y, top(this) + barHeight + gap);
-                if (method !== "logWindowRect") rect.height = Math.max(1, bottom - rect.y);
-            }
-            return rect;
-        };
-    }
-    const relayout = Scene_Battle.prototype.relayoutBattleWindows;
-    if (relayout) {
-        Scene_Battle.prototype.relayoutBattleWindows = function() {
-            relayout.call(this);
-            if (timelineEnabled() && this._logWindow) this._logWindow.y = this.logWindowRect().y;
-        };
-    }
+    const listWindowActive = () => {
+        const scene = SceneManager._scene;
+        return [scene?._skillWindow, scene?._itemWindow, scene?._enemyWindow, scene?._actorWindow]
+            .some(window => window?.visible && window.active);
+    };
+    const logWindowRect = Scene_Battle.prototype.logWindowRect;
+    Scene_Battle.prototype.logWindowRect = function() {
+        const rect = logWindowRect.call(this);
+        if (timelineEnabled()) {
+            rect.x = 0;
+            rect.y = 0;
+            rect.width = Math.min(rect.width, Math.floor(Graphics.boxWidth * 0.5),
+                Graphics.boxWidth - columnWidth);
+        }
+        return rect;
+    };
+    Scene_Battle.prototype.linearTimeOrderWindowRect = function() {
+        const actorCommandY = this.actorCommandWindowRect?.().y || 0;
+        const statusY = this.statusWindowRect?.().y || Graphics.boxHeight;
+        const bottom = actorCommandY > 0 ? actorCommandY : statusY;
+        const maxCount = Math.max(1, Math.floor((bottom - pad * 2) / cell));
+        const count = Math.min(previewCount, maxCount);
+        return new Rectangle(Graphics.boxWidth - columnWidth, 0, columnWidth, count * cell + pad * 2);
+    };
 
     const enemyLetter = enemy => enemy._plural && enemy._letter ? String(enemy._letter).trim() : "";
     const walkPatterns = [0, 1, 2, 1];
 
-    // Compact chip bar: window skin frame, tinted chip backgrounds on contentsBack,
-    // walking/enemy sprites between contentsBack and contents, letters on contents.
+    // Compact vertical chips: tinted backgrounds on contentsBack, battler
+    // sprites between contentsBack and contents, and enemy letters on contents.
     class Window_LinearTimeOrder extends Window_Base {
         constructor(rect) {
             super(rect);
@@ -261,13 +254,13 @@
         update() {
             super.update();
             this.visible = timelineEnabled() && !BattleManager.isBattleEnd() &&
-                !BattleManager.isAborting() && !$gameMessage.isBusy();
+                !BattleManager.isAborting() && !$gameMessage.isBusy() && !listWindowActive();
             if (!this.visible) return;
             if (++this._tick % 4 === 1) this.refreshOrder();
             this.updatePortraits();
         }
         refreshOrder() {
-            const count = Math.min(previewCount, Math.max(1, Math.floor(this.innerWidth / cell)));
+            const count = Math.min(previewCount, Math.max(1, Math.floor(this.innerHeight / cell)));
             const order = BattleManager.linearTimeOrder(count);
             const signature = JSON.stringify(order.map(({ battler: b, label }) => [
                 b.isActor() ? "a" + b.actorId() : "e" + b.index(), label, b.isSelected(),
@@ -282,22 +275,22 @@
             this._portraits.forEach(sprite => { sprite.visible = false; sprite._entry = null; });
             order.forEach((entry, index) => {
                 const b = entry.battler;
-                const x = index * cell;
+                const y = index * cell;
                 const color = ColorManager.textColor(b.isActor() ? 1 : 2);
                 const back = this.contentsBack;
                 back.paintOpacity = entry.label ? 120 : 64;
-                back.fillRect(x + 1, 1, cell - 2, cell - 2, color);
+                back.fillRect(1, y + 1, cell - 2, cell - 2, color);
                 back.paintOpacity = 255;
-                back.fillRect(x + 1, cell - 3, cell - 2, 2, color);
+                back.fillRect(1, y + cell - 3, cell - 2, 2, color);
                 if (b.isSelected()) {
                     const gold = ColorManager.textColor(6);
-                    back.fillRect(x + 1, 1, cell - 2, 2, gold);
-                    back.fillRect(x + 1, cell - 3, cell - 2, 2, gold);
-                    back.fillRect(x + 1, 1, 2, cell - 2, gold);
-                    back.fillRect(x + cell - 3, 1, 2, cell - 2, gold);
+                    back.fillRect(1, y + 1, cell - 2, 2, gold);
+                    back.fillRect(1, y + cell - 3, cell - 2, 2, gold);
+                    back.fillRect(1, y + 1, 2, cell - 2, gold);
+                    back.fillRect(cell - 3, y + 1, 2, cell - 2, gold);
                 }
                 if (!b.isActor() && enemyLetter(b)) {
-                    this.contents.drawText(enemyLetter(b), x, cell - 20, cell - 4, 18, "right");
+                    this.contents.drawText(enemyLetter(b), 0, y + cell - 20, cell - 4, 18, "right");
                 }
                 let sprite = this._portraits[index];
                 if (!sprite) {
@@ -309,8 +302,8 @@
                 }
                 sprite._entry = entry;
                 sprite._index = index;
-                sprite.x = x + cell / 2;
-                sprite.y = cell / 2;
+                sprite.x = cell / 2;
+                sprite.y = y + cell / 2;
                 sprite.bitmap = b.isActor() ? ImageManager.loadCharacter(b.characterName()) :
                     ($gameSystem.isSideView() ? ImageManager.loadSvEnemy(b.battlerName()) : ImageManager.loadEnemy(b.battlerName()));
                 sprite.setHue(b.isActor() ? 0 : b.battlerHue());
@@ -347,9 +340,7 @@
     Scene_Battle.prototype.createAllWindows = function() {
         originalCreate.call(this);
         if (!timelineEnabled()) return;
-        const count = Math.min(previewCount, Math.max(1, Math.floor((Graphics.boxWidth - gap * 2 - pad * 2) / cell)));
-        this._linearTimeOrderWindow = new Window_LinearTimeOrder(
-            new Rectangle(gap, top(this), count * cell + pad * 2, barHeight));
+        this._linearTimeOrderWindow = new Window_LinearTimeOrder(this.linearTimeOrderWindowRect());
         this.addWindow(this._linearTimeOrderWindow);
     };
 })();

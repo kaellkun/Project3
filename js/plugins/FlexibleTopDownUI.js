@@ -1,10 +1,10 @@
 //=============================================================================
-// RPG Maker MZ - Flexible Top-Down UI (Horizontal Command & Bottom Help)
+// RPG Maker MZ - Flexible Top-Down UI (Battle Commands above Status & Context Help)
 //=============================================================================
 
 /*:
  * @target MZ
- * @plugindesc Responsive UI layout: Horizontal top-aligned commands & bottom-aligned help window for PC and Mobile.
+ * @plugindesc Responsive UI layout: Horizontal commands and contextual battle help.
  * @author Copilot
  *
  * @param MobileBreakpointWidth
@@ -17,7 +17,7 @@
  *
  * Layout Principles:
  * 1. Command Windows: Top-aligned and displayed horizontally (multi-column rows).
- * 2. Help Window: Bottom-aligned at the very bottom of the screen.
+ * 2. Help Window: Bottom-aligned in menus; top-aligned during battle selection.
  * 3. PC (Landscape): Parallel multi-column content layout in the middle.
  * 4. Mobile (Portrait): Vertical stacked content in the middle with bottom-sheet modals.
  * 5. Status: Fixed basic-information panel on the left (no equipment list);
@@ -815,7 +815,7 @@
     };
 
     //-----------------------------------------------------------------------------
-    // Scene_Battle (Top-aligned Commands at y=0, Static Bottom Status Window)
+    // Scene_Battle (Actor Commands above Status, Static Bottom Status Window)
     //-----------------------------------------------------------------------------
     // Disable dynamic horizontal sliding of status window in battle
     Scene_Battle.prototype.updateStatusWindowPosition = function() {
@@ -835,14 +835,18 @@
     };
 
     Scene_Battle.prototype.actorCommandWindowRect = function() {
-        return this.partyCommandWindowRect();
+        const statusRect = this.statusWindowRect();
+        const wh = this.battleCommandHeight();
+        return new Rectangle(0, statusRect.y - wh, Graphics.boxWidth, wh);
     };
 
     Scene_Battle.prototype.logWindowRect = function() {
-        const ww = Graphics.boxWidth;
-        const wh = this.calcWindowHeight(10, false);
+        // Keep battle text in the upper-left, leaving the center of the field
+        // clear for enemy sprites and the right edge for the action-order column.
+        const ww = Math.floor(Graphics.boxWidth * 0.5);
+        const wh = this._logWindow?.windowHeight?.() || this.calcWindowHeight(4, false);
         const wx = 0;
-        const wy = this.battleCommandHeight();
+        const wy = 0;
         return new Rectangle(wx, wy, ww, wh);
     };
 
@@ -860,24 +864,20 @@
 
     Scene_Battle.prototype.helpWindowRect = function() {
         const boxW = Graphics.boxWidth;
-        const boxH = Graphics.boxHeight;
         const helpH = this.helpAreaHeight();
-        const statusH = isPortraitLayout() ? 160 : 140;
         const wx = 0;
-        const wy = boxH - statusH - helpH;
+        const wy = 0;
         const ww = boxW;
         const wh = helpH;
-        return new Rectangle(wx, wy, ww, wh);
+        const rect = new Rectangle(wx, wy, ww, wh);
+        rect.helpLineCount = 4;
+        return rect;
     };
 
     Scene_Battle.prototype.skillWindowRect = function() {
-        const boxW = Graphics.boxWidth;
-        const boxH = Graphics.boxHeight;
-        const cmdH = this.battleCommandHeight();
-        const statusH = isPortraitLayout() ? 160 : 140;
-        const topY = cmdH;
-        const availableH = boxH - topY - statusH - this.helpAreaHeight();
-        return new Rectangle(0, topY, boxW, Math.max(1, availableH));
+        const helpH = this.helpAreaHeight();
+        const listH = Math.max(1, Graphics.boxHeight - helpH);
+        return new Rectangle(0, helpH, Graphics.boxWidth, listH);
     };
 
     Scene_Battle.prototype.itemWindowRect = function() {
@@ -889,7 +889,50 @@
     };
 
     Scene_Battle.prototype.enemyWindowRect = function() {
-        return this.skillWindowRect();
+        const helpH = this.helpAreaHeight();
+        return new Rectangle(0, helpH, Graphics.boxWidth,
+            Math.max(1, Graphics.boxHeight - helpH));
+    };
+
+    const appendBattleCancelHint = window => {
+        const helpWindow = window._helpWindow;
+        if (!helpWindow) return;
+        const text = helpWindow._text || "";
+        helpWindow.setText(`${text ? `${text}\n` : ""}Xキー：戻る`);
+    };
+
+    for (const windowType of [Window_BattleSkill, Window_BattleItem]) {
+        const updateHelp = windowType.prototype.updateHelp;
+        windowType.prototype.updateHelp = function() {
+            updateHelp.call(this);
+            appendBattleCancelHint(this);
+        };
+    }
+
+    Window_BattleEnemy.prototype.updateHelp = function() {
+        const enemy = this.enemy();
+        if (this._helpWindow) {
+            const name = enemy ? enemy.name() : "敵を選択してください";
+            this._helpWindow.setText(`${name}\nXキー：戻る`);
+        }
+    };
+
+    const _Window_BattleEnemy_show = Window_BattleEnemy.prototype.show;
+    Window_BattleEnemy.prototype.show = function() {
+        _Window_BattleEnemy_show.call(this);
+        this.showHelpWindow();
+    };
+
+    const _Window_BattleEnemy_hide = Window_BattleEnemy.prototype.hide;
+    Window_BattleEnemy.prototype.hide = function() {
+        _Window_BattleEnemy_hide.call(this);
+        this.hideHelpWindow();
+    };
+
+    const _Scene_Battle_createEnemyWindow = Scene_Battle.prototype.createEnemyWindow;
+    Scene_Battle.prototype.createEnemyWindow = function() {
+        _Scene_Battle_createEnemyWindow.call(this);
+        this._enemyWindow.setHelpWindow(this._helpWindow);
     };
 
     const _Scene_Battle_create = Scene_Battle.prototype.create;
@@ -904,20 +947,33 @@
         const cmdH = this.battleCommandHeight();
         const statusH = isPortraitLayout() ? 160 : 140;
 
-        // Screen Top-aligned Commands (y = 0)
+        // Party commands remain at the top; actor commands sit immediately
+        // above the fixed status area.
         setWindowRect(this._partyCommandWindow, 0, 0, boxW, cmdH);
-        setWindowRect(this._actorCommandWindow, 0, 0, boxW, cmdH);
+        const actorCommandRect = this.actorCommandWindowRect();
+        setWindowRect(this._actorCommandWindow, actorCommandRect.x, actorCommandRect.y,
+            actorCommandRect.width, actorCommandRect.height);
 
-        // Battle log sits directly below the active command row.
-        const logHeight = this._logWindow?.windowHeight?.() || this.calcWindowHeight(4, false);
-        setWindowRect(this._logWindow, 0, cmdH, boxW, logHeight);
+        // Keep the battle log away from the enemy formation in the upper-left.
+        const logRect = this.logWindowRect();
+        const logWidth = Math.min(logRect.width, Math.floor(boxW * 0.5));
+        setWindowRect(this._logWindow, logRect.x, logRect.y, logWidth, logRect.height);
 
         // Screen Bottom-aligned Status (Fixed Operation Area at the Bottom)
         setWindowRect(this._statusWindow, 0, boxH - statusH, boxW, statusH);
 
-        // Help Window positioned just above status window if needed
+        // Battle selection help stays at the top of the screen.
         const helpH = this.helpAreaHeight();
-        setWindowRect(this._helpWindow, 0, boxH - statusH - helpH, boxW, helpH);
+        setWindowRect(this._helpWindow, 0, 0, boxW, helpH);
+
+        // Battle skill/item lists must end above the help area. They are drawn
+        // after the help window and otherwise cover its details when full-screen.
+        const skillRect = this.skillWindowRect();
+        const itemRect = this.itemWindowRect();
+        const enemyRect = this.enemyWindowRect();
+        setWindowRect(this._skillWindow, skillRect.x, skillRect.y, skillRect.width, skillRect.height);
+        setWindowRect(this._itemWindow, itemRect.x, itemRect.y, itemRect.width, itemRect.height);
+        setWindowRect(this._enemyWindow, enemyRect.x, enemyRect.y, enemyRect.width, enemyRect.height);
     };
 
 })();
