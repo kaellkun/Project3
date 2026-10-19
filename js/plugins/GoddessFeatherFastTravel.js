@@ -37,6 +37,8 @@
  * @default 宿屋
  *
  * @help
+ * マップイベントのメモ欄に <CampRestPoint> を指定すると、イベント起動時に
+ * 焚き火を訪問済みとして登録します。休憩せずセーブだけ・キャンセルでも登録されます。
  * 指定したコモンイベントが実行された時点のマップ・座標を訪問済み地点として保存します。
  * 同じ地点は重複登録しません。保存データにも保持されるため、次回ロード後も利用できます。
  *
@@ -106,6 +108,16 @@
             $gameSystem.recordGoddessFeatherLocation("inn", eventId);
         }
     }
+
+    const _Game_Event_start = Game_Event.prototype.start;
+    Game_Event.prototype.start = function() {
+        const list = this.list();
+        if (list && list.length > 1 && /<CampRestPoint>/i.test(this.event().note || "")) {
+            // CampRestの再開スナップショットにも訪問済み情報を含めます。
+            $gameSystem.recordGoddessFeatherLocation("campfire", this.eventId());
+        }
+        return _Game_Event_start.apply(this, arguments);
+    };
 
     const _Game_Temp_reserveCommonEvent = Game_Temp.prototype.reserveCommonEvent;
     Game_Temp.prototype.reserveCommonEvent = function(commonEventId) {

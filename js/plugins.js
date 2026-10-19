@@ -3,6 +3,7 @@
 var $plugins =
 [
 {"name":"Message/CenterText","status":true,"description":"メッセージウィンドウの文章を行単位で中央寄せします。","parameters":{"DefaultAlignment":"left"}},
+{"name":"Message/MessageWindowPosition","status":true,"description":"イベント内のメッセージ表示位置を上・下に一括固定します。","parameters":{}},
 {"name":"Status/HideUnusedParameters","status":true,"description":"ステータス・装備・戦闘情報から未使用能力値を非表示にします。","parameters":{}},
 {"name":"Common/PluginCommonBase","status":true,"description":"パラメータ解析を提供する共通基盤です","parameters":{}},
 {"name":"Common/NUUN_Base","status":true,"description":"共通処理","parameters":{}},
