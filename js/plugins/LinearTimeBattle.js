@@ -220,8 +220,6 @@
         if (timelineEnabled()) {
             rect.x = 0;
             rect.y = 0;
-            rect.width = Math.min(rect.width, Math.floor(Graphics.boxWidth * 0.5),
-                Graphics.boxWidth - columnWidth);
         }
         return rect;
     };

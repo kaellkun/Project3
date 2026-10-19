@@ -54,6 +54,8 @@
  * ■【設定3】行動ビューの見た目をカスタマイズ
  * 　プラグインパラメータ → 『行動ビュー』
  * ◎色々と設定項目が並んでいるが、好きにいじってよい
+ * ◎行動ビューにはスキル名と一緒に、予測ターゲットと命中率も表示される
+ * 　複数ターゲットで命中率が異なる場合は、最小値〜最大値で表示される
  * 
  * 
  * ■【設定4】ターゲットラインの見た目をカスタマイズ
@@ -1564,7 +1566,7 @@
         battlerSprite = battlerSprite || searchSpriteBattler(battler);
         if (!battlerSprite) { return; }
         const actions = battler._actions.filter(action => action && action.item());
-        const skillNames = actions.map(action => getSkillName(action)).filter(a => a);
+        const skillNames = actions.map(action => getSkillName(action, battler)).filter(a => a);
         // 行動テキストの作成
         const text = makeActText(skillNames);
         // 行動ビューの形成
@@ -1609,13 +1611,40 @@
     };
 
     //- スキル名の取得
-    function getSkillName(action) {
+    function getSkillName(action, battler) {
         const item = action.item();
         // スキル名を取得
         const skillName = item.name;
         // メモ欄から表示名を取得
         const showName = getPredictionCfg(null, "テキスト", "", action);
-        return showName || skillName;
+        const targetInfo = makeActionTargetInfo(action, battler);
+        return (showName || skillName) + targetInfo;
+    };
+
+    //- 予測ターゲットと命中率の取得
+    function makeActionTargetInfo(action, battler) {
+        const actionIndex = battler._actions.indexOf(action);
+        const targetData = battler._targetsFastKe && battler._targetsFastKe.lists[actionIndex];
+        if (!targetData || !targetData.length) { return ""; }
+        const targets = [...new Set(targetData.map(dataToBattler).filter(target => target && target.isAlive()))];
+        if (!targets.length) { return ""; }
+
+        const rates = targets.map(target => {
+            if (typeof action.getHitRateInfo === "function") {
+                const info = action.getHitRateInfo(target);
+                if (info && Number.isFinite(Number(info.finalRate))) {
+                    return Math.round(Number(info.finalRate));
+                }
+            }
+            const hitRate = Math.min(Math.max(Number(action.itemHit(target)) || 0, 0), 1);
+            const evasionRate = Math.min(Math.max(Number(action.itemEva(target)) || 0, 0), 1);
+            return Math.round(hitRate * (1 - evasionRate) * 100);
+        });
+        const minRate = Math.min(...rates);
+        const maxRate = Math.max(...rates);
+        const rateText = minRate === maxRate ? String(minRate) : `${minRate}〜${maxRate}`;
+        const targetNames = targets.map(target => target.name()).join("、");
+        return `（対象: ${targetNames} 命中率: ${rateText}%）`;
     };
 
     //- 行動テキストの作成

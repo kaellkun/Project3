@@ -682,8 +682,8 @@ test('action-order window is vertical on the right and does not reserve list spa
             assert.equal(rect.y + rect.height, 420, 'list geometry is not reduced for the timeline');
         }
         assert.equal(scene.logWindowRect().height, 60);
-        assert.equal(scene.logWindowRect().width, Math.min(Graphics.boxWidth / 2, Graphics.boxWidth - 64),
-            'battle log stays left of the action-order column and clears the field center');
+        assert.equal(scene.logWindowRect().width, Graphics.boxWidth,
+            'battle log spans the full screen width');
         scene.relayoutBattleWindows();
         assert.equal(scene._logWindow.y, 0);
         window.update();

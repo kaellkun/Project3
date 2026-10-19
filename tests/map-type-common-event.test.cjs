@@ -228,6 +228,27 @@ test('registered safely with four unassigned types and installed dependency orde
     assert.ok(ln >= 0 && keke > ln && enabled.indexOf('MapTypeCommonEvent') > keke);
 });
 
+test('day/night can be disabled without disabling map types or daily respawn', () => {
+    setup({ filters: true, parameters: { DayNightEnabled: 'false', InitialTime: 'night',
+        DefaultDayFilter: '1', DefaultNightFilter: '5', NightSwitch: '1',
+        NightCommonEvent: '7', MorningCommonEvent: '8' } })(`
+        initial(); assert.equal($gameSystem._mapTypeDayNight, undefined);
+        expectFilter(1); assert.equal($gameSwitches.value(1), false);
+        $gameSystem._mapTypeDayNight = { night: true, total: 5, progress: 2, nights: 1 };
+        start(Scene_Load);
+        assert.deepEqual($gameSystem._mapTypeDayNight, { night: true, total: 5, progress: 2, nights: 1 });
+        expectFilter(1); assert.equal($gameSwitches.value(1), false);
+        command('RecordDefeat', { Amount: '3' }); command('StartNight');
+        command('SetProgress', { Value: '9' }); command('Morning');
+        assert.deepEqual($gameSystem._mapTypeDayNight, { night: true, total: 5, progress: 2, nights: 1 });
+        assert.deepEqual(getState(), [0, 0, 0, 0, 0]);
+        assert.deepEqual($gameTemp._commonEventQueue, []);
+        command('AdvanceDay'); assert.equal($gameSystem._mapTypeCommonEventRespawnDay, 1);
+        transfer(11, '<マップ種別:街>'); tick();
+        assert.deepEqual(log, ['街']);
+    `);
+});
+
 for (const time of ['day', 'night']) {
     test(`initial time ${time}: real new game sets filter/switch without arrivals or common reservations`, () => {
         setup({ keke: true, filters: true, parameters: { InitialTime: time, DefaultNightFilter: '5',

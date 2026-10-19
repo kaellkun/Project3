@@ -301,7 +301,7 @@ test('real battle scene and timeline use the same expanded command bottom', () =
             scene.statusWindowRect().y, 'actor command sits directly above the status area');
         assert.equal(scene.actorCommandWindowRect().y, 396);
         assert.equal(scene.logWindowRect().y, 0, 'battle log remains in the upper-left');
-        assert.equal(scene.logWindowRect().width, Math.floor(Graphics.boxWidth * 0.5));
+        assert.equal(scene.logWindowRect().width, Graphics.boxWidth);
         const helpRect = scene.helpWindowRect();
         assert.equal(helpRect.y, 0, 'battle help is top-aligned');
         for (const method of ['skillWindowRect', 'itemWindowRect', 'enemyWindowRect']) {

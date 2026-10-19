@@ -31,6 +31,14 @@
  * @type boolean
  * @default false
  *
+ * @param DayNightEnabled
+ * @text 昼夜切り替え機能
+ * @desc OFFなら昼夜状態の変更・撃破カウント・夜用フィルターを停止します。マップ種別・日次リポップは動作します。
+ * @type boolean
+ * @on 有効
+ * @off 無効
+ * @default true
+ *
  * @param FilterEnabled
  * @text 昼夜フィルター連携
  * @desc LN_FilmicFilter導入時のみ使用できます。OFFならフィルターを一切変更しません。
@@ -186,6 +194,9 @@
  * 本プラグインは勝利を自動検出しません。同じ勝利でコマンドを2回呼ぶと2回分です。
  *
  * ■ 昼夜とフィルター
+ * 「昼夜切り替え機能」をOFFにすると、昼夜コマンドと撃破カウントを停止し、常に昼として扱います。
+ * マップ種別の入場コモンと日次リポップは引き続き動作します。日付を進める場合は
+ * 「日付を進めて日次アイテムを再ポップ」を使用してください。
  * 種別設定で「昼の番号」「夜の番号」を設定。-2は標準設定を継承します。
  * 昼の優先順：種別の昼 → 昼の標準 → マップの<FilmicFilter:番号> → 0。
  * 夜の優先順：種別の夜 → 夜の標準 → そのマップの昼。
@@ -329,6 +340,7 @@
     const parameters = PluginManager.parameters(pluginName);
     const onlyTypeChange = parameters.OnlyTypeChange === 'true';
     const runOnNewGame = parameters.RunOnNewGame === 'true';
+    const dayNightEnabled = parameters.DayNightEnabled !== 'false';
     const initialTime = parameters.InitialTime || 'day';
     if (!['day', 'night'].includes(initialTime)) {
         throw new Error(`${pluginName}: ゲーム開始時の時間帯は昼(day)か夜(night)を指定してください。`);
@@ -389,9 +401,15 @@
     // 状態はGame_Systemだけが正本。出力スイッチ・取得先変数からの逆同期はしない。
     function state() {
         if (!$gameSystem._mapTypeDayNight) {
-            $gameSystem._mapTypeDayNight = { night: initialTime === 'night', total: 0, progress: 0, nights: 0 };
+            $gameSystem._mapTypeDayNight = {
+                night: dayNightEnabled && initialTime === 'night', total: 0, progress: 0, nights: 0
+            };
         }
         return $gameSystem._mapTypeDayNight;
+    }
+
+    function isNight() {
+        return dayNightEnabled && state().night;
     }
 
     function respawnDay() {
@@ -482,7 +500,7 @@
     }
 
     function syncNightSwitch() {
-        if (nightSwitch) $gameSwitches.setValue(nightSwitch, state().night);
+        if (nightSwitch) $gameSwitches.setValue(nightSwitch, isNight());
     }
 
     function reserveTransitionCommon(id) {
@@ -501,7 +519,7 @@
         let day = rule && rule.dayFilter !== -2 ? rule.dayFilter : dayFilter;
         if (day === -2) day = mapDefault;
         const indoors = meta['屋内'] !== undefined || (rule ? rule.excludeNight : currentMapType() === '屋内');
-        if (!state().night || indoors) return day;
+        if (!isNight() || indoors) return day;
         const night = rule && rule.nightFilter !== -2 ? rule.nightFilter : nightFilter;
         return night === -2 ? day : night;
     }
@@ -526,6 +544,7 @@
     }
 
     function startNight() {
+        if (!dayNightEnabled) return;
         const s = state();
         if (s.night) return;
         s.night = true;
@@ -537,6 +556,7 @@
     }
 
     PluginManager.registerCommand(pluginName, 'RecordDefeat', args => {
+        if (!dayNightEnabled) return;
         const amount = integer(args.Amount, 1, 1, '加算数');
         const s = state();
         s.total = Math.min(Number.MAX_SAFE_INTEGER, s.total + amount);
@@ -547,6 +567,7 @@
     });
     PluginManager.registerCommand(pluginName, 'StartNight', startNight);
     PluginManager.registerCommand(pluginName, 'Morning', () => {
+        if (!dayNightEnabled) return;
         const s = state();
         const wasNight = s.night;
         s.night = false;
@@ -559,14 +580,18 @@
         refreshCurrentMapFilter();
     });
     PluginManager.registerCommand(pluginName, 'SetProgress', args => {
+        if (!dayNightEnabled) return;
         const value = integer(args.Value, 0, 0, '今回の撃破進捗');
         if (!state().night) state().progress = value;
     });
     PluginManager.registerCommand(pluginName, 'GetState', args => {
         const s = state();
-        const required = requiredKills();
-        const values = { TotalVariable: s.total, ProgressVariable: s.progress, NightsVariable: s.nights,
-            RequiredVariable: required, RemainingVariable: s.night ? 0 : Math.max(0, required - s.progress) };
+        const required = dayNightEnabled ? requiredKills() : 0;
+        const values = dayNightEnabled
+            ? { TotalVariable: s.total, ProgressVariable: s.progress, NightsVariable: s.nights,
+                RequiredVariable: required, RemainingVariable: isNight() ? 0 : Math.max(0, required - s.progress) }
+            : { TotalVariable: 0, ProgressVariable: 0, NightsVariable: 0,
+                RequiredVariable: 0, RemainingVariable: 0 };
         // 書き込み途中のエラーで一部だけ変えないようIDを先に検証。
         const outputs = Object.entries(values).map(([key, value]) =>
             [integer(args[key], 0, 0, '取得先変数'), value]);

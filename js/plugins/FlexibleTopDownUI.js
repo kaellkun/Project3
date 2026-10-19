@@ -843,9 +843,7 @@
     };
 
     Scene_Battle.prototype.logWindowRect = function() {
-        // Keep battle text in the upper-left, leaving the center of the field
-        // clear for enemy sprites and the right edge for the action-order column.
-        const ww = Math.floor(Graphics.boxWidth * 0.5);
+        const ww = Graphics.boxWidth;
         const wh = this._logWindow?.windowHeight?.() || this.calcWindowHeight(4, false);
         const wx = 0;
         const wy = 0;
@@ -973,10 +971,8 @@
         setWindowRect(this._actorCommandWindow, actorCommandRect.x, actorCommandRect.y,
             actorCommandRect.width, actorCommandRect.height);
 
-        // Keep the battle log away from the enemy formation in the upper-left.
         const logRect = this.logWindowRect();
-        const logWidth = Math.min(logRect.width, Math.floor(boxW * 0.5));
-        setWindowRect(this._logWindow, logRect.x, logRect.y, logWidth, logRect.height);
+        setWindowRect(this._logWindow, logRect.x, logRect.y, logRect.width, logRect.height);
 
         // Screen Bottom-aligned Status (Fixed Operation Area at the Bottom)
         setWindowRect(this._statusWindow, 0, boxH - statusH, boxW, statusH);
