@@ -28,6 +28,8 @@
  *    wheel/touch scrolling; the Back command exits the status screen.
  * 6. Equip: slots are listed in two columns; long names shrink to fit.
  * 7. Skill: an empty skill type shows "該当スキルなし" instead of a blank list.
+ * 8. Battle selection controls appear in a separate bottom-left footer,
+ *    outside the description help and selection lists.
  */
 
 (() => {
@@ -870,13 +872,18 @@
         const ww = boxW;
         const wh = helpH;
         const rect = new Rectangle(wx, wy, ww, wh);
-        rect.helpLineCount = 4;
+        rect.helpLineCount = 3;
         return rect;
+    };
+
+    Scene_Battle.prototype.battleOperationHelpWindowRect = function() {
+        const height = this.calcWindowHeight(1, false);
+        return new Rectangle(0, Graphics.boxHeight - height, Graphics.boxWidth, height);
     };
 
     Scene_Battle.prototype.skillWindowRect = function() {
         const helpH = this.helpAreaHeight();
-        const listH = Math.max(1, Graphics.boxHeight - helpH);
+        const listH = Math.max(1, this.battleOperationHelpWindowRect().y - helpH);
         return new Rectangle(0, helpH, Graphics.boxWidth, listH);
     };
 
@@ -891,29 +898,41 @@
     Scene_Battle.prototype.enemyWindowRect = function() {
         const helpH = this.helpAreaHeight();
         return new Rectangle(0, helpH, Graphics.boxWidth,
-            Math.max(1, Graphics.boxHeight - helpH));
+            Math.max(1, this.battleOperationHelpWindowRect().y - helpH));
     };
 
-    const appendBattleCancelHint = window => {
-        const helpWindow = window._helpWindow;
-        if (!helpWindow) return;
-        const text = helpWindow._text || "";
-        helpWindow.setText(`${text ? `${text}\n` : ""}Xキー：戻る`);
+    Scene_Battle.prototype.createBattleOperationHelpWindow = function() {
+        const window = new Window_Base(this.battleOperationHelpWindowRect());
+        window.opacity = 0;
+        window.drawText("Xキー：戻る", 0, 0, window.innerWidth);
+        window.hide();
+        this._battleOperationHelpWindow = window;
+        this.addWindow(window);
     };
 
-    for (const windowType of [Window_BattleSkill, Window_BattleItem]) {
-        const updateHelp = windowType.prototype.updateHelp;
-        windowType.prototype.updateHelp = function() {
-            updateHelp.call(this);
-            appendBattleCancelHint(this);
-        };
-    }
+    Scene_Battle.prototype.updateBattleOperationHelpWindow = function() {
+        this._battleOperationHelpWindow.visible = [
+            this._skillWindow, this._itemWindow, this._enemyWindow
+        ].some(window => window && window.visible && window.active);
+    };
+
+    const _Scene_Battle_createAllWindows = Scene_Battle.prototype.createAllWindows;
+    Scene_Battle.prototype.createAllWindows = function() {
+        _Scene_Battle_createAllWindows.call(this);
+        this.createBattleOperationHelpWindow();
+    };
+
+    const _Scene_Battle_update = Scene_Battle.prototype.update;
+    Scene_Battle.prototype.update = function() {
+        _Scene_Battle_update.call(this);
+        this.updateBattleOperationHelpWindow();
+    };
 
     Window_BattleEnemy.prototype.updateHelp = function() {
         const enemy = this.enemy();
         if (this._helpWindow) {
             const name = enemy ? enemy.name() : "敵を選択してください";
-            this._helpWindow.setText(`${name}\nXキー：戻る`);
+            this._helpWindow.setText(name);
         }
     };
 
@@ -966,8 +985,7 @@
         const helpH = this.helpAreaHeight();
         setWindowRect(this._helpWindow, 0, 0, boxW, helpH);
 
-        // Battle skill/item lists must end above the help area. They are drawn
-        // after the help window and otherwise cover its details when full-screen.
+        // Keep selection lists between the description and operation-help footer.
         const skillRect = this.skillWindowRect();
         const itemRect = this.itemWindowRect();
         const enemyRect = this.enemyWindowRect();

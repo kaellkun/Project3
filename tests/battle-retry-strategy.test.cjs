@@ -13,17 +13,49 @@ function buildContext(parameters = {}) {
         Object.assign(this, { x, y, width, height });
     }
     function Window_Command(rect) {
-        this.rect = rect;
-        this._commands = [];
-        this._handlers = {};
-        this.makeCommandList();
+        this.initialize(rect);
     }
+    Window_Command.prototype.initialize = function(rect) {
+        this.rect = rect;
+        this.padding = 12;
+        this._handlers = {};
+        this.refresh();
+    };
+    Window_Command.prototype.refresh = function() {
+        this._list = [];
+        this.makeCommandList();
+    };
+    Window_Command.prototype.makeCommandList = function() {};
     Window_Command.prototype.addCommand = function(name, symbol) {
-        this._commands.push({ name, symbol });
+        this._list.push({ name, symbol });
     };
     Window_Command.prototype.setHandler = function(symbol, handler) {
         this._handlers[symbol] = handler;
     };
+    Window_Command.prototype.maxItems = function() {
+        return this._list.length;
+    };
+    Window_Command.prototype.itemHeight = function() {
+        return 64;
+    };
+    Window_Command.prototype.fittingHeight = function(numLines) {
+        return numLines * Window_Command.prototype.itemHeight() + 24;
+    };
+    Window_Command.prototype.itemPadding = function() {
+        return 8;
+    };
+    Window_Command.prototype.colSpacing = function() {
+        return 8;
+    };
+    Window_Command.prototype.textWidth = function(text) {
+        return text.length * 26;
+    };
+    Window_Command.prototype.move = function(x, y, width, height) {
+        this.rect = { x, y, width, height };
+    };
+    Window_Command.prototype.createContents = function() {};
+    Window_Command.prototype.ensureCursorVisible = function() {};
+    Window_Command.prototype.refreshCursor = function() {};
     function Scene_Base() {}
     Scene_Base.prototype.calcWindowHeight = function(lines) { return lines * 36; };
     Scene_Base.prototype.createWindowLayer = function() {};
@@ -84,18 +116,19 @@ test("game over shows exactly the three requested choices without intermediate m
     scene.create();
 
     assert.deepEqual(
-        scene._window._commands.map(command => command.name),
+        scene._window._list.map(command => command.name),
         ["リトライ", "宿屋に戻る", "タイトルに戻る"]
     );
     assert.deepEqual(
-        scene._window._commands.map(command => command.symbol),
+        scene._window._list.map(command => command.symbol),
         ["retry", "inn", "title"]
     );
-    assert.equal(scene._window.maxCols(), 3);
-    assert.equal(scene._window._commands.length, scene._window.maxCols());
-    assert.equal(scene._window.rect.width, 768);
-    assert.equal(scene._window.rect.x, 24);
-    assert.equal(scene._window.rect.height, 36);
+    assert.equal(scene._window.maxCols(), 1);
+    // コマンド文字列に合わせたジャストサイズで中央下部に表示される
+    assert.equal(scene._window.rect.width, 238);
+    assert.equal(scene._window.rect.x, Math.floor((816 - 238) / 2));
+    assert.equal(scene._window.rect.height, 3 * 64 + 24);
+    assert.equal(scene._window.rect.y, 624 - (3 * 64 + 24) - 48);
 });
 
 test("retry restores the pre-battle save and restarts the same troop", () => {
@@ -131,12 +164,10 @@ test("inn choice is hidden when only an unrelated variable has a value", () => {
     scene.create();
 
     assert.deepEqual(
-        scene._window._commands.map(command => command.symbol),
+        scene._window._list.map(command => command.symbol),
         ["retry", "title"]
     );
-    assert.equal(scene._window.maxCols(), 2);
-    assert.equal(scene._window._commands.length, scene._window.maxCols());
-    assert.equal(scene._window.rect.height, 36);
+    assert.equal(scene._window.rect.height, 2 * 64 + 24);
 });
 
 test("title choice clears retry state and returns to the title", () => {
@@ -161,7 +192,7 @@ test("a failed escape preserves the retry choice", () => {
     scene.create();
     assert.ok(scene._window);
     assert.deepEqual(
-        scene._window._commands.map(command => command.symbol),
+        scene._window._list.map(command => command.symbol),
         ["retry", "inn", "title"]
     );
 });

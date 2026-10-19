@@ -33,18 +33,50 @@ function setup(includePlayer = false) {
     Game_Player.prototype.update = function() {};
     const player = new Game_Player();
     function Window_Command(rect) {
-        this.rect = rect;
-        this.list = [];
-        this.makeCommandList();
+        this.initialize(rect);
     }
+    Window_Command.prototype.initialize = function(rect) {
+        this.rect = rect;
+        this.padding = 12;
+        this.refresh();
+    };
+    Window_Command.prototype.refresh = function() {
+        this._list = [];
+        this.makeCommandList();
+    };
+    Window_Command.prototype.makeCommandList = function() {};
+    Window_Command.prototype.addCommand = function(name, symbol, enabled = true, ext = null) {
+        this._list.push({ name, symbol, enabled, ext });
+    };
+    Window_Command.prototype.maxItems = function() {
+        return this._list.length;
+    };
+    Window_Command.prototype.itemHeight = function() {
+        return 64;
+    };
+    Window_Command.prototype.fittingHeight = function(numLines) {
+        return numLines * Window_Command.prototype.itemHeight() + 24;
+    };
+    Window_Command.prototype.itemPadding = function() {
+        return 8;
+    };
+    Window_Command.prototype.colSpacing = function() {
+        return 8;
+    };
+    Window_Command.prototype.textWidth = function(text) {
+        return text.length * 26;
+    };
+    Window_Command.prototype.move = function(x, y, width, height) {
+        this.rect = { x, y, width, height };
+    };
+    Window_Command.prototype.createContents = function() {};
+    Window_Command.prototype.ensureCursorVisible = function() {};
+    Window_Command.prototype.refreshCursor = function() {};
     Window_Command.prototype.setHandler = function(symbol, handler) {
         this.handlers = this.handlers || {};
         this.handlers[symbol] = handler;
     };
     Window_Command.prototype.deactivate = function() {};
-    Window_Command.prototype.addCommand = function(name, symbol) {
-        this.list.push({ name, symbol });
-    };
     function Scene_Gameover() {}
     Scene_Gameover.prototype.create = function() {};
     Scene_Gameover.prototype.gotoTitle = function() {
@@ -104,20 +136,6 @@ function setup(includePlayer = false) {
         Scene_Map,
         Scene_Gameover
     });
-    context.Window_Command.prototype = {
-        initialize() {},
-        setHandler(symbol, handler) {
-            this.handlers = this.handlers || {};
-            this.handlers[symbol] = handler;
-        },
-        deactivate() {},
-        addCommand(name, symbol) {
-            this.list = this.list || [];
-            this.list.push({ name, symbol });
-        }
-    };
-    context.Window_Command.prototype.constructor = Window_Command;
-    context.Scene_Gameover.prototype.calcWindowHeight = lines => lines * 48;
     context.Scene_Gameover.prototype.createWindowLayer = function() {};
     context.Scene_Gameover.prototype.addWindow = function(window) {
         this.window = window;
@@ -153,20 +171,22 @@ test('game over clears the retry state and goes to the title', () => {
     assert.equal(nextScene.window, undefined);
 });
 
-test('game over shows exactly three direct choices', () => {
+test('game over shows the direct choices in a fitted vertical window', () => {
     const { context } = setup();
     context.BattleManager.setup(3, false, false);
     const scene = new context.Scene_Gameover();
     scene.create();
 
-    assert.deepEqual(scene.window.list.map(command => command.name), [
+    assert.deepEqual(scene.window._list.map(command => command.name), [
         'リトライ', '宿屋に戻る', 'タイトルに戻る'
     ]);
-    assert.equal(scene.window.maxCols(), 3);
-    assert.equal(scene.window.list.length, scene.window.maxCols());
-    assert.equal(scene.window.rect.width, 768);
-    assert.equal(scene.window.rect.x, 24);
-    assert.equal(scene.window.rect.height, 48);
+    assert.equal(scene.window.maxCols(), 1);
+    // 最長コマンド「タイトルに戻る」(7文字*26px=182) + 余白56px にフィット
+    assert.equal(scene.window.rect.width, 238);
+    assert.equal(scene.window.rect.x, Math.floor((816 - 238) / 2));
+    // Window_Command基準の行高(64px)×3行 + パディング24px
+    assert.equal(scene.window.rect.height, 3 * 64 + 24);
+    assert.equal(scene.window.rect.y, 624 - (3 * 64 + 24) - 48);
 });
 
 test('returning to the inn restores the pre-battle state and starts the inn event', () => {
@@ -188,10 +208,51 @@ test('hides the inn choice when only an unrelated variable has a value', () => {
     const scene = new context.Scene_Gameover();
     scene.create();
 
-    assert.deepEqual(scene.window.list.map(command => command.name), [
+    assert.deepEqual(scene.window._list.map(command => command.name), [
         'リトライ', 'タイトルに戻る'
     ]);
-    assert.equal(scene.window.maxCols(), 2);
-    assert.equal(scene.window.list.length, scene.window.maxCols());
-    assert.equal(scene.window.rect.height, 48);
+    assert.equal(scene.window.rect.height, 2 * 64 + 24);
+});
+
+test('shows the campfire resume choice when a camp checkpoint exists', () => {
+    const { context } = setup();
+    let resumed = 0;
+    context.CampRestCheckpoint = {
+        isValid: () => true,
+        resume: () => { resumed++; return true; }
+    };
+
+    // 戦闘前スナップショットが無い(マップ上のゲームオーバー)でも表示される
+    const scene = new context.Scene_Gameover();
+    scene.create();
+    assert.deepEqual(scene.window._list.map(command => command.name), [
+        '焚き火から再開', 'タイトルに戻る'
+    ]);
+
+    scene.window.handlers.campfire();
+    assert.equal(resumed, 1);
+    assert.equal(scene.titled, undefined);
+});
+
+test('lists campfire resume together with the battle retry choices', () => {
+    const { context } = setup();
+    context.CampRestCheckpoint = { isValid: () => true, resume: () => true };
+    context.BattleManager.setup(3, false, false);
+    const scene = new context.Scene_Gameover();
+    scene.create();
+
+    assert.deepEqual(scene.window._list.map(command => command.name), [
+        '焚き火から再開', 'リトライ', '宿屋に戻る', 'タイトルに戻る'
+    ]);
+    assert.equal(scene.window.rect.height, 4 * 64 + 24);
+});
+
+test('falls back to the title when the campfire resume fails', () => {
+    const { context } = setup();
+    context.CampRestCheckpoint = { isValid: () => true, resume: () => false };
+    const scene = new context.Scene_Gameover();
+    scene.create();
+    scene.window.handlers.campfire();
+
+    assert.equal(scene.titled, true);
 });

@@ -307,11 +307,12 @@ test('real battle scene and timeline use the same expanded command bottom', () =
         for (const method of ['skillWindowRect', 'itemWindowRect', 'enemyWindowRect']) {
             const rect = scene[method]();
             assert.deepEqual([rect.x, rect.y, rect.width, rect.height],
-                [0, helpRect.height, 816, 624 - helpRect.height],
-                'battle selection lists begin below the help window and use all remaining space');
+                [0, helpRect.height, 816, scene.battleOperationHelpWindowRect().y - helpRect.height],
+                'battle selection lists stay between description help and operation help');
         }
-        assert.equal(scene.skillWindowRect().y + scene.skillWindowRect().height, 624,
-            'skill list fills the space down to the screen bottom while the actor/status window is hidden');
+        assert.equal(scene.skillWindowRect().y + scene.skillWindowRect().height,
+            scene.battleOperationHelpWindowRect().y,
+            'skill list leaves the bottom footer clear');
         const order = scene.linearTimeOrderWindowRect();
         assert.deepEqual([order.x, order.y, order.width], [752, 0, 64],
             'action order is a vertical column at the right edge');
@@ -333,14 +334,14 @@ test('battle relayout keeps skill/item windows clear of the contextual help wind
         scene.relayoutBattleWindows();
         for (const win of [scene._skillWindow, scene._itemWindow]) {
             assert.equal(win.y, scene._helpWindow.y + scene._helpWindow.height);
-            assert.equal(win.y + win.height, Graphics.boxHeight);
+            assert.equal(win.y + win.height, scene.battleOperationHelpWindowRect().y);
         }
         assert.equal(scene._helpWindow.y, 0);
         assert.equal(scene._enemyWindow.y, scene._helpWindow.height);
     `);
 });
 
-test('battle skill, item and enemy help include details and the X-key return hint', () => {
+test('battle skill, item and enemy descriptions do not include operation hints', () => {
     setup()(`
         const makeHelp = () => ({
             _text: '',
@@ -353,13 +354,51 @@ test('battle skill, item and enemy help include details and the X-key return hin
             win.item = () => ({ description: label });
             win.updateHelp();
             assert.match(win._helpWindow._text, new RegExp(label));
-            assert.match(win._helpWindow._text, /Xキー：戻る/);
+            assert.equal(win._helpWindow._text, label);
+            win.item = () => null;
+            win.updateHelp();
+            assert.equal(win._helpWindow._text, '');
         }
         const enemy = Object.create(Window_BattleEnemy.prototype);
         enemy._helpWindow = makeHelp();
         enemy.enemy = () => ({ name: () => '選択中の敵' });
         enemy.updateHelp();
-        assert.match(enemy._helpWindow._text, /選択中の敵/);
-        assert.match(enemy._helpWindow._text, /Xキー：戻る/);
+        assert.equal(enemy._helpWindow._text, '選択中の敵');
+        enemy.enemy = () => null;
+        enemy.updateHelp();
+        assert.equal(enemy._helpWindow._text, '敵を選択してください');
     `);
 });
+
+for (const [width, height] of [[816, 624], [480, 816], [1280, 720]]) {
+    test(`operation hint is bottom-left and only visible during selection at ${width}x${height}`, () => {
+        setup(width, height)(`
+            const scene = sceneFor(Scene_Battle);
+            const added = [];
+            scene.addWindow = win => added.push(win);
+            scene.createBattleOperationHelpWindow();
+            const hint = scene._battleOperationHelpWindow;
+            assert.equal(added[0], hint);
+            assert.equal(hint.visible, false);
+            assert.equal(hint.opacity, 0);
+            assert.equal(hint.x, 0);
+            assert.equal(hint.y + hint.height, Graphics.boxHeight);
+            assert.equal(hint.contents.draws[0].text, 'Xキー：戻る');
+            assert.equal(hint.contents.draws[0].x, 0);
+            assert.equal(hint.contents.draws[0].y, 0);
+            assert.ok(hint.contents.draws[0].height <= hint.innerHeight);
+            for (const key of ['_skillWindow', '_itemWindow', '_enemyWindow']) {
+                scene[key] = { visible: true, active: true };
+                scene.updateBattleOperationHelpWindow();
+                assert.equal(hint.visible, true);
+                scene[key].active = false;
+                scene.updateBattleOperationHelpWindow();
+                assert.equal(hint.visible, false);
+                scene[key].active = true;
+                scene[key].visible = false;
+                scene.updateBattleOperationHelpWindow();
+                assert.equal(hint.visible, false);
+            }
+        `);
+    });
+}

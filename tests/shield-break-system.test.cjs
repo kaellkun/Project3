@@ -440,6 +440,62 @@ test('UI follows image top and scales without inheriting hue; redraw is cached',
     `);
 });
 
+test('configured center HP gauge keeps prediction above and shield below as enemy size changes', () => {
+    const run = setup();
+    run(read('js/plugins.js'));
+    const gaugeSource = read('js/plugins/Battle/Enemy/NUUN_ButlerHPGauge.js');
+    const positionStart = gaugeSource.indexOf('Sprite_Battler.prototype.getBattlerHpPosition =');
+    const positionEnd = gaugeSource.indexOf('Sprite_Actor.prototype.getBattlerHpSVPosition =', positionStart);
+    const predictionSource = read('js/plugins/Battle/Enemy/Keke_PredictionSystem.js');
+    const predictionStart = predictionSource.indexOf('    function updateViewPosAct(');
+    const predictionEnd = predictionSource.indexOf('    //- 鋼体ビューがあるか', predictionStart);
+    assert.ok(positionStart >= 0 && positionEnd > positionStart);
+    assert.ok(predictionStart >= 0 && predictionEnd > predictionStart);
+    run(`
+        const gaugePlugin = $plugins.find(plugin => plugin.name === 'Battle/Enemy/NUUN_ButlerHPGauge');
+        assert.equal(gaugePlugin.status, true);
+        const HPPosition = Number(gaugePlugin.parameters.HPPosition);
+        assert.equal(HPPosition, 2);
+        assert.equal(gaugePlugin.parameters.ActorHPPosition, '-1');
+        class Sprite_Battler extends Sprite {}
+        ${gaugeSource.slice(positionStart, positionEnd)}
+        const keke_actPosEnemy = {}, keke_actPosActor = {};
+        const getFullAnimeStatusAsi = () => null;
+        const existSteelView = () => false;
+        const noOutScreen = () => {};
+        ${predictionSource.slice(predictionStart, predictionEnd)}
+        const { source, scene, panel } = createPanel();
+        source._frame = source.bitmap;
+        source._homeX = source.x;
+        source._homeY = source.y;
+        source.getBattlerOverlayHeight = () => Math.floor(source.bitmap.height * 0.9);
+        source.getBattlerOverlayConflict = () => source.scale.y;
+        const overlay = scene.addChild(new Sprite());
+        overlay.x = source.x;
+        overlay.y = source.y;
+        const gauge = overlay.addChild(new Sprite());
+        gauge.bitmap = new Bitmap(124, 24);
+        source._battlerHp = gauge;
+        const prediction = scene.addChild(new Sprite());
+        Object.assign(prediction, {
+            _width: 160, _height: 48, _memoXKe: 0, _memoYKe: 0,
+            _centerXKe: 0, _centerYKe: 0
+        });
+        for (const [height, scale, expectedY] of [[100, 1, 355], [200, 1.5, 265]]) {
+            source.bitmap.height = height;
+            source.scale.y = scale;
+            gauge.y = -Sprite_Battler.prototype.getBattlerHpPosition.call(source);
+            panel.update();
+            updateViewPosAct(prediction, source, enemy);
+            assert.equal(overlay.y + gauge.y, expectedY);
+            assert.equal(panel.x, Math.round(source.x - panel.bitmap.width / 2));
+            assert.equal(panel.y, expectedY);
+            assert.equal(prediction.x + prediction._width / 2, source.x);
+            assert.equal(prediction.y + prediction._height, expectedY - gauge.bitmap.height - 4);
+        }
+    `);
+});
+
 test('UI handles hidden enemies, death, appearance, unknown cells and edge clamps', () => {
     setup()(`
         configure('<WeaknessHidden:true><WeakElements:1,2,3,4,5,6,7,8,9>');

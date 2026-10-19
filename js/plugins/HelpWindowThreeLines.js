@@ -4,7 +4,7 @@
 
 /*:
  * @target MZ
- * @plugindesc 通常ヘルプを3行、戦闘ヘルプを4行に調整します。(v1.0.0)
+ * @plugindesc 通常・戦闘ヘルプを3行に調整します。(v1.0.0)
  * @author Copilot
  * @orderAfter FlexibleTopDownUI
  * @orderAfter NRP_LearnSkillList
@@ -20,7 +20,7 @@
  *
  * @help
  * 通常のヘルプウィンドウを標準の3行分の高さに統一します。
- * 戦闘中は「Xキー：戻る」の案内用に4行分を確保します。
+ * 戦闘中の操作説明はFlexibleTopDownUIの左下の専用領域に表示します。
  * プラグイン管理で「ヘルプ文字サイズ倍率（%）」を設定してください。
  * ゲーム内オプションへの項目追加はありません。
  *
@@ -48,7 +48,6 @@
         ? Math.max(10, Math.min(100, rawRate)) / 100
         : 0.85;
     const lines = 3;
-    const battleLines = 4;
 
     const _Window_Help_initialize = Window_Help.prototype.initialize;
     Window_Help.prototype.initialize = function(rect) {
@@ -79,12 +78,8 @@
         return this.calcWindowHeight(lines, false);
     }
 
-    function battleHelpAreaHeight() {
-        return this.calcWindowHeight(battleLines, false);
-    }
-
     Scene_MenuBase.prototype.helpAreaHeight = helpAreaHeight;
-    Scene_Battle.prototype.helpAreaHeight = battleHelpAreaHeight;
+    Scene_Battle.prototype.helpAreaHeight = helpAreaHeight;
     Scene_Status.prototype.profileHeight = helpAreaHeight;
 
     // File scenes subtract the actual help height from their list area already.

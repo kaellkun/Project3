@@ -4,7 +4,7 @@
 
 /*:
  * @target MZ
- * @plugindesc 全滅時に「リトライ」「宿屋に戻る」「タイトルに戻る」を選べます。
+ * @plugindesc 全滅時に「焚き火から再開」「リトライ」「宿屋に戻る」「タイトルに戻る」を選べます。
  * @author Copilot
  *
  * @param innCommonEventId
@@ -14,15 +14,19 @@
  * @desc 宿屋への転送処理を行うコモンイベントIDです。標準は最後に利用した宿屋へ移動するコモンイベント5です。
  *
  * @help
- * 戦闘開始直前の状態を保存し、全滅時に3つの選択肢を表示します。
+ * 戦闘開始直前の状態を保存し、全滅時に選択肢を表示します。
  * 「リトライ」は保存した状態に戻して同じ戦闘を再開します。
  * 「宿屋に戻る」は状態を戻してから指定コモンイベントを実行します。
  * 標準のコモンイベント5は最後に利用した宿屋へ移動する処理です。
  *
+ * CampRest.js の焚き火再開ポイントが記録されている場合は、
+ * 「焚き火から再開」で記録時点の状態・位置に戻れます。
+ * （マップ上でのゲームオーバーでも選択できます）
+ *
  * 戦闘開始前の状態を保存するため、セーブデータ全体を一時保存します。
  *
  * GameOverOnAnyDeath.js と併用する場合は、このプラグインをその後に
- * 配置してください。
+ * 配置してください。CampRest.js より後に配置してください。
  */
 
 (() => {
@@ -34,6 +38,12 @@
     const innMapVariableId = 21;
 
     const hasInnMap = () => $gameVariables.value(innMapVariableId) !== 0;
+
+    const campRestCheckpoint = () => globalThis.CampRestCheckpoint || null;
+    const hasCampfireCheckpoint = () => {
+        const checkpoint = campRestCheckpoint();
+        return !!(checkpoint && checkpoint.isValid());
+    };
 
     const retryState = {
         contents: null,
@@ -74,38 +84,60 @@
     };
 
     class Window_BattleRetryCommand extends Window_Command {
+        initialize(rect) {
+            super.initialize(rect);
+            this.fitToContents();
+        }
+
         maxCols() {
-            return hasInnMap() ? 3 : 2;
+            return 1;
         }
 
         makeCommandList() {
-            this.addCommand("リトライ", "retry");
-            if (hasInnMap()) {
-                this.addCommand("宿屋に戻る", "inn");
+            if (hasCampfireCheckpoint()) {
+                this.addCommand("焚き火から再開", "campfire");
+            }
+            if (retryState.contents) {
+                this.addCommand("リトライ", "retry");
+                if (hasInnMap()) {
+                    this.addCommand("宿屋に戻る", "inn");
+                }
             }
             this.addCommand("タイトルに戻る", "title");
+        }
+
+        // コマンド文字列に合わせたジャストサイズで画面下部中央に配置します。
+        fitToContents() {
+            const maxTextWidth = this._list.reduce(
+                (width, command) => Math.max(width, this.textWidth(command.name)), 0
+            );
+            const width = Math.ceil(maxTextWidth) +
+                this.itemPadding() * 2 + this.colSpacing() + this.padding * 2 + 8;
+            const height = this.fittingHeight(this.maxItems());
+            const x = Math.floor((Graphics.boxWidth - width) / 2);
+            const y = Graphics.boxHeight - height - 48;
+            this.move(x, y, width, height);
+            this.createContents();
+            this.refresh();
+            this.ensureCursorVisible(false);
+            this.refreshCursor();
         }
     }
 
     const _Scene_Gameover_create = Scene_Gameover.prototype.create;
     Scene_Gameover.prototype.create = function() {
         _Scene_Gameover_create.apply(this, arguments);
-        if (retryState.contents) {
+        if (retryState.contents || hasCampfireCheckpoint()) {
             this.createWindowLayer();
             this.createBattleRetryWindow();
         }
     };
 
     Scene_Gameover.prototype.createBattleRetryWindow = function() {
-        const width = Math.min(768, Graphics.boxWidth - 48);
-        const height = this.calcWindowHeight(1, true);
-        const rect = new Rectangle(
-            (Graphics.boxWidth - width) / 2,
-            Graphics.boxHeight - height - 48,
-            width,
-            height
-        );
+        // 実サイズは Window_BattleRetryCommand.fitToContents が決定します。
+        const rect = new Rectangle(0, 0, 320, Window_Command.prototype.fittingHeight(4));
         this._battleRetryWindow = new Window_BattleRetryCommand(rect);
+        this._battleRetryWindow.setHandler("campfire", this.resumeFromCampfire.bind(this));
         this._battleRetryWindow.setHandler("retry", this.retryBattle.bind(this));
         this._battleRetryWindow.setHandler("inn", this.goToInn.bind(this));
         this._battleRetryWindow.setHandler("title", this.gotoTitle.bind(this));
@@ -118,6 +150,14 @@
             Scene_Base.prototype.update.call(this);
         } else {
             _Scene_Gameover_update.apply(this, arguments);
+        }
+    };
+
+    Scene_Gameover.prototype.resumeFromCampfire = function() {
+        const checkpoint = campRestCheckpoint();
+        clearRetryState();
+        if (!checkpoint || !checkpoint.resume()) {
+            this.gotoTitle();
         }
     };
 

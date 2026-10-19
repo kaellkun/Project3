@@ -339,7 +339,7 @@ for (const [width,height] of [[816,624],[480,816],[390,844],[808,1400],[1280,720
                 assert.equal(panel.y,area.y); assert.ok(panel.y>=scene.helpWindowRect().y+scene.helpWindowRect().height);
                 assert.equal(e.y,panel.y+panel.height); assert.ok(e.maxPageRows()>=1);
                 assert.ok(e.y >= scene.helpWindowRect().y + scene.helpWindowRect().height);
-                assert.equal(e.y+e.height,Graphics.boxHeight);
+                assert.equal(e.y+e.height,scene.battleOperationHelpWindowRect().y);
                 assert.equal(panel._description.element.rate,0.75);
                 for (const [text,x,y,w,h] of panel.contents.text) {
                     assert.ok(x>=0 && y>=0 && x+w<=panel.innerWidth && y+h<=panel.innerHeight);

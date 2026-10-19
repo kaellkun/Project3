@@ -318,6 +318,26 @@ test('hierarchy real actor command constructor works without initialization work
     `);
 });
 
+test('operation footer is created with battle windows and follows actual skill/cancel transitions', () => {
+    setup().run(`
+        const scene = battleScene(), win = scene._actorCommandWindow;
+        const hint = scene._battleOperationHelpWindow;
+        assert.ok(hint);
+        assert.equal(hint.visible, false);
+        choose(win, 'fightMenu');
+        choose(win, 'skill', 1);
+        scene.updateBattleOperationHelpWindow();
+        assert.equal(scene._skillWindow.active, true);
+        assert.equal(hint.visible, true);
+        assert.ok(!scene._helpWindow._text.includes('Xキー：戻る'));
+        assert.equal(hint.contents.text[0][0], 'Xキー：戻る');
+        cancel(scene._skillWindow);
+        scene.updateBattleOperationHelpWindow();
+        assert.equal(hint.visible, false);
+        assertLayer(scene, 'fight', 'skill');
+    `);
+});
+
 test('root has exactly five labels in order, with real optional integrations', () => {
     setup().run(`
         const scene = battleScene(), win = scene._actorCommandWindow;
@@ -1043,8 +1063,8 @@ for (const [width, height, cols, rows] of [[360, 800, 3, 2], [639, 900, 3, 2],
             }
             const skill = scene.skillWindowRect(), help = scene.helpWindowRect(), reserve = scene._battleReserveWindow;
             assert.deepEqual([skill.x, skill.y, skill.width, skill.height],
-                [0, help.height, Graphics.boxWidth, Graphics.boxHeight - help.height],
-                'skill list starts below the top help and fills the remaining screen');
+                [0, help.height, Graphics.boxWidth, scene.battleOperationHelpWindowRect().y - help.height],
+                'skill list stays between the top help and operation footer');
             assert.equal(help.y, 0, 'battle help stays at the top');
             assert.deepEqual([scene.itemWindowRect().x, scene.itemWindowRect().y,
                 scene.itemWindowRect().width, scene.itemWindowRect().height],

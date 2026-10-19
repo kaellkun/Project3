@@ -137,10 +137,10 @@ for (const flexible of [false, true]) {
                 assert.equal(scene.helpWindowRect().height, 132, type.name);
             }
             const battle = Object.create(Scene_Battle.prototype);
-            assert.equal(battle.helpAreaHeight(), 168);
+            assert.equal(battle.helpAreaHeight(), 132);
             const battleHelpRect = battle.helpWindowRect();
-            assert.equal(battleHelpRect.height, 168);
-            assert.equal(new Window_Help(battleHelpRect).height, 168);
+            assert.equal(battleHelpRect.height, 132);
+            assert.equal(new Window_Help(battleHelpRect).height, 132);
             for (const type of [Scene_Save, Scene_Load]) {
                 const scene = Object.create(type.prototype);
                 const rect = scene.helpWindowRect();
@@ -164,7 +164,7 @@ for (const flexible of [false, true]) {
 }
 
 for (const [width, height] of [[816, 624], [480, 816], [1280, 720]]) {
-    test(`battle relayout keeps four help rows and avoids list overlap at ${width}x${height}`, () => {
+    test(`battle relayout keeps three help rows and a separate footer at ${width}x${height}`, () => {
         setup()(`
             Object.assign(Graphics, { width: ${width}, boxWidth: ${width},
                 height: ${height}, boxHeight: ${height} });
@@ -172,15 +172,16 @@ for (const [width, height] of [[816, 624], [480, 816], [1280, 720]]) {
             const rect = scene.helpWindowRect();
             scene._helpWindow = new Window_Help(rect);
             scene.relayoutBattleWindows();
-            assert.equal(scene._helpWindow.height, 168);
+            assert.equal(scene._helpWindow.height, 132);
             assert.equal(scene._helpWindow.y, 0);
-            assert.equal(scene._helpWindow.contents.height, 144);
-            scene._helpWindow.setText('一\\n二\\n三\\nXキー：戻る');
-            assert.equal(scene._helpWindow.contents.draws.at(-1).y, 108,
-                'the X-key hint fits on the fourth battle-help row');
+            assert.equal(scene._helpWindow.contents.height, 108);
+            scene._helpWindow.setText('一\\n二\\n三');
+            assert.equal(scene._helpWindow.contents.draws.at(-1).y, 72);
             const list = scene.skillWindowRect();
+            const footer = scene.battleOperationHelpWindowRect();
             assert.equal(list.y, scene._helpWindow.height);
-            assert.equal(list.y + list.height, ${height});
+            assert.equal(list.y + list.height, footer.y);
+            assert.equal(footer.y + footer.height, ${height});
             assert.ok(list.height > 0);
         `);
     });
