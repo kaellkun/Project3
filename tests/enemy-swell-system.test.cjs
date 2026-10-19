@@ -18,6 +18,8 @@ function setup({ swellTypes = [], withShieldBreak = true, parameters = {} } = {}
     const log = [];
     let logBusy = false;
     let inBattle = true;
+    const partyMembers = [];
+    const troopMembers = [];
     const calls = { forceAction: [], originalMakeActions: 0, originalEndAction: 0, displayAffectedStatus: [], invokeAttempted: [], invokeApplied: [], originalApply: 0 };
 
     function Game_Enemy() {}
@@ -116,7 +118,8 @@ function setup({ swellTypes = [], withShieldBreak = true, parameters = {} } = {}
         BattleManager: battleManager,
         $dataSkills: { 99: { name: '爆発' }, 32: { name: '自爆' } },
         $dataSystem: { elements: { 4: '雷' } },
-        $gameParty: { inBattle: () => inBattle },
+        $gameParty: { inBattle: () => inBattle, members: () => partyMembers },
+        $gameTroop: { members: () => troopMembers },
         $gameMessage: {
             isBusy: () => messages.length > 0,
             add: text => messages.push(text)
@@ -153,7 +156,7 @@ function setup({ swellTypes = [], withShieldBreak = true, parameters = {} } = {}
         return enemy;
     }
 
-    return { context, variables, switches, calls, makeEnemy, makeAction, battleManager, messages, log,
+    return { context, variables, switches, calls, makeEnemy, makeAction, battleManager, messages, log, partyMembers, troopMembers,
         setLogBusy(value) { logBusy = value; }, setInBattle(value) { inBattle = value; } };
 }
 
@@ -379,6 +382,81 @@ test('an already-dead subject is not processed again', () => {
     battleManager.endAction();
 
     assert.equal(calls.displayAffectedStatus.length, 0);
+});
+
+// Keke_SpeedStarBattle defers invokeAction until a pop wait elapses, recording the
+// pending hit on the target as `_popWaitsKe: [{ wait, subjectId, action }]`.
+test('self-destruct waits for Keke_SpeedStarBattle delayed damage before defeating the user', () => {
+    const { makeEnemy, calls, battleManager, partyMembers, troopMembers } = setup();
+    const enemy = makeEnemy();
+    const action = { item: () => ({ meta: { '自爆': true } }) };
+    const actorA = { _popWaitsKe: [{ wait: 25, action }] };
+    const actorB = { _popWaitsKe: [{ wait: 25, action }] };
+    partyMembers.push(actorA, actorB);
+    troopMembers.push(enemy);
+    battleManager._subject = enemy;
+    battleManager._action = action;
+    battleManager.initMembers();
+
+    battleManager.endAction();
+    assert.equal(enemy.isAlive(), true, 'the enemy survives until the damage lands');
+    assert.equal(calls.originalEndAction, 1);
+
+    battleManager.update();
+    assert.equal(enemy.isAlive(), true, 'still alive while any delayed hit is pending');
+
+    actorA._popWaitsKe = [];
+    battleManager.update();
+    assert.equal(enemy.isAlive(), true, 'one target still has a pending hit');
+
+    actorB._popWaitsKe[0] = null; // Keke nulls the entry in place before filtering
+    battleManager.update();
+    assert.equal(enemy.isAlive(), false, 'defeated once every delayed hit has resolved');
+    assert.deepEqual(calls.displayAffectedStatus, [enemy]);
+    assert.equal(calls.originalUpdate, 3, 'the original update still runs each frame');
+
+    battleManager.update();
+    assert.equal(calls.displayAffectedStatus.length, 1, 'processed only once');
+});
+
+test('a pending hit from a different action does not delay the self-destruct', () => {
+    const { makeEnemy, calls, battleManager, partyMembers } = setup();
+    const enemy = makeEnemy();
+    partyMembers.push({ _popWaitsKe: [{ wait: 10, action: { item: () => ({ meta: {} }) } }] });
+    battleManager._subject = enemy;
+    battleManager._action = { item: () => ({ meta: { '自爆': true } }) };
+    battleManager.initMembers();
+
+    battleManager.endAction();
+
+    assert.equal(enemy.isAlive(), false);
+    assert.deepEqual(calls.displayAffectedStatus, [enemy]);
+});
+
+test('a deferred self-destruct is dropped if the battle ends or the enemy dies first', () => {
+    const { makeEnemy, calls, battleManager, partyMembers } = setup();
+    const action = { item: () => ({ meta: { '自爆': true } }) };
+    const target = { _popWaitsKe: [{ wait: 25, action }] };
+    partyMembers.push(target);
+    battleManager.initMembers();
+
+    const killed = makeEnemy();
+    battleManager._subject = killed;
+    battleManager._action = action;
+    battleManager.endAction();
+    killed._hp = 0; // defeated by someone else while waiting
+    target._popWaitsKe = [];
+    battleManager.update();
+    assert.equal(calls.displayAffectedStatus.length, 0, 'no second death display');
+
+    const survivor = makeEnemy();
+    target._popWaitsKe = [{ wait: 25, action }];
+    battleManager._subject = survivor;
+    battleManager.endAction();
+    battleManager._phase = 'battleEnd';
+    battleManager.update();
+    assert.equal(battleManager._pendingSelfDestructs.length, 0, 'pending list cleared at battle end');
+    assert.equal(survivor.isAlive(), true);
 });
 
 test('a self-destruct skill still lands damage even if the enemy broke earlier the same turn', () => {

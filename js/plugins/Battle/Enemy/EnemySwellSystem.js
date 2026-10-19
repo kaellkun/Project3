@@ -4,7 +4,7 @@
 
 /*:
  * @target MZ
- * @plugindesc 敵の膨張を管理し、発動予告をログと文章ウィンドウに表示します。(v1.4.0)
+ * @plugindesc 敵の膨張を管理し、発動予告をログと文章ウィンドウに表示します。(v1.4.1)
  * @author Copilot
  * @orderAfter ShieldBreakSystem
  *
@@ -35,6 +35,9 @@
  * 　<膨張>タグ付きスキルのダメージはShieldBreakSystemの「ブレイク中は
  * 　行動無効」処理を回避して必ず命中します（抑えられた自爆がパーティに
  * 　ダメージを与えない不具合の修正）。
+ * ・Keke_SpeedStarBattle 等でダメージ適用が遅延する場合、自爆した敵は
+ * 　ダメージが全て着弾してから戦闘不能になります（先に敵だけが倒れて
+ * 　勝利扱いになる不具合の修正）。
  *
  * 【敵のメモ欄】
  *   <膨張:キー名>       … プラグインパラメータで定義した膨張タイプを指定
@@ -406,16 +409,58 @@
         target.advanceSwellByElements(elements);
     };
 
+    function defeatSelfDestructUser(subject) {
+        subject.clearResult();
+        subject.setHp(0);
+        BattleManager._logWindow.displayAffectedStatus(subject);
+    }
+
+    // Keke_SpeedStarBattle はダメージ適用をポップウェイト後まで遅延し、その予約を
+    // 各ターゲットの _popWaitsKe に積む。未着弾の予約が残っている間は使用者を倒さない。
+    function hasDelayedInvoke(action) {
+        if (!action || typeof $gameTroop === "undefined" || typeof $gameParty.members !== "function") return false;
+        return [...$gameParty.members(), ...$gameTroop.members()].some(battler =>
+            Array.isArray(battler._popWaitsKe) &&
+            battler._popWaitsKe.some(entry => entry && entry.action === action));
+    }
+
+    const initSelfDestructMembers = BattleManager.initMembers;
+    BattleManager.initMembers = function() {
+        initSelfDestructMembers.apply(this, arguments);
+        this._pendingSelfDestructs = [];
+    };
+
     // 自爆タグ付きスキルを使い終えた敵を、通常の戦闘不能演出・メッセージ付きで倒す。
+    // ダメージが遅延中なら、先に倒して勝利判定が走らないよう着弾後まで保留する。
     const endAction = BattleManager.endAction;
     BattleManager.endAction = function() {
         const subject = this._subject;
         const action = this._action;
         if (subject && subject.isEnemy() && subject.isAlive() && isSelfDestructSkill(action && action.item())) {
-            subject.clearResult();
-            subject.setHp(0);
-            this._logWindow.displayAffectedStatus(subject);
+            if (hasDelayedInvoke(action)) {
+                (this._pendingSelfDestructs ||= []).push({ subject, action });
+            } else {
+                defeatSelfDestructUser(subject);
+            }
         }
         endAction.apply(this, arguments);
+    };
+
+    const updateSelfDestruct = BattleManager.update;
+    BattleManager.update = function() {
+        const pending = this._pendingSelfDestructs;
+        if (pending?.length) {
+            if (this._phase === "battleEnd") {
+                pending.length = 0;
+            } else {
+                for (let i = pending.length - 1; i >= 0; i--) {
+                    const { subject, action } = pending[i];
+                    if (hasDelayedInvoke(action)) continue;
+                    pending.splice(i, 1);
+                    if (subject.isAlive()) defeatSelfDestructUser(subject);
+                }
+            }
+        }
+        return updateSelfDestruct.apply(this, arguments);
     };
 })();
