@@ -459,7 +459,7 @@
         class NotifyItem {
             /**
              * 初期化
-             * @param {{ message?: string; icon: number; note?: string; }} params
+             * @param {{ message?: string; icon: number; note?: string; description?: string; }} params
              */
             constructor(params) {
                 this.initialize(params);
@@ -469,6 +469,7 @@
                 this.message = params.message || '';
                 this.icon = params.icon;
                 this.note = params.note || '';
+                this.description = params.description || '';
                 this._openness = 0;
 
                 DataManager.extractMetadata(this);
@@ -593,7 +594,15 @@
 
                 const messageRect = this.messageRect();
                 this.drawTextEx(message, messageRect.x, messageRect.y, messageRect.width);
-                if (icon) this.drawIcon(icon, this.leftPadding(), (this.innerHeight - ImageManager.iconHeight) / 2);
+                if (this._notifyItem.description) {
+                    this.drawDescription(messageRect);
+                }
+                if (icon) {
+                    const iconY = this._notifyItem.description
+                        ? messageRect.y + (messageRect.height - ImageManager.iconHeight) / 2
+                        : (this.innerHeight - ImageManager.iconHeight) / 2;
+                    this.drawIcon(icon, this.leftPadding(), iconY);
+                }
             }
 
             /**
@@ -603,10 +612,137 @@
             itemSize() {
                 const { icon } = this._notifyItem;
                 const messageRect = this.messageRect();
+                const descriptionLayout = this.descriptionLayout();
+                const descriptionY = messageRect.y + messageRect.height + this.descriptionSpacing();
                 return {
-                    width: Math.min(Graphics.width, messageRect.x + messageRect.width + this.rightPadding()),
-                    height: Math.max(messageRect.y + messageRect.height, icon ? ImageManager.iconHeight : 0),
+                    width: Math.min(
+                        Graphics.width,
+                        Math.max(
+                            messageRect.x + messageRect.width,
+                            messageRect.x + descriptionLayout.width,
+                        ) + this.rightPadding(),
+                    ),
+                    height: Math.max(
+                        descriptionLayout.lines.length
+                            ? descriptionY + descriptionLayout.height
+                            : messageRect.y + messageRect.height,
+                        icon ? ImageManager.iconHeight : 0,
+                    ),
                 };
+            }
+
+            /**
+             * 説明文を本文の下に小さく表示
+             * @param {Rectangle} messageRect
+             */
+            drawDescription(messageRect) {
+                const layout = this.descriptionLayout();
+                if (!layout.lines.length) return;
+
+                const fontSize = this.contents.fontSize;
+                const textColor = this.contents.textColor;
+                const fontBold = this.contents.fontBold;
+                const fontItalic = this.contents.fontItalic;
+                this.contents.fontSize = this.descriptionFontSize();
+                this.contents.textColor = ColorManager.textColor(7);
+                this.contents.fontBold = false;
+                this.contents.fontItalic = false;
+
+                const x = messageRect.x;
+                const y = messageRect.y + messageRect.height + this.descriptionSpacing();
+                const lineHeight = this.descriptionLineHeight();
+                for (let i = 0; i < layout.lines.length; i++) {
+                    this.drawText(layout.lines[i], x, y + i * lineHeight, layout.width, 'left');
+                }
+
+                this.contents.fontSize = fontSize;
+                this.contents.textColor = textColor;
+                this.contents.fontBold = fontBold;
+                this.contents.fontItalic = fontItalic;
+            }
+
+            /**
+             * 説明文の折り返しと表示サイズ
+             * @returns {{lines: string[], width: number, height: number}}
+             */
+            descriptionLayout() {
+                const description = this._notifyItem.description;
+                if (!description) return { lines: [], width: 0, height: 0 };
+
+                const maxWidth = this.messageMaxWidth();
+                const fontSize = this.contents.fontSize;
+                this.contents.fontSize = this.descriptionFontSize();
+
+                const lines = [];
+                let truncated = false;
+                const paragraphs = String(description).split(/\r?\n/);
+                outer: for (let paragraphIndex = 0; paragraphIndex < paragraphs.length; paragraphIndex++) {
+                    const paragraph = paragraphs[paragraphIndex];
+                    let line = '';
+                    for (const character of Array.from(paragraph)) {
+                        if (line && this.textWidth(line + character) > maxWidth) {
+                            if (lines.length === 2) {
+                                lines.push(line);
+                                truncated = true;
+                                break outer;
+                            }
+                            lines.push(line);
+                            line = character;
+                        } else {
+                            line += character;
+                        }
+                    }
+                    if (lines.length === 2 && paragraphIndex < paragraphs.length - 1) {
+                        lines.push(line);
+                        truncated = true;
+                        break;
+                    }
+                    lines.push(line);
+                    if (lines.length === 3 && paragraphIndex < paragraphs.length - 1) {
+                        truncated = true;
+                        break;
+                    }
+                }
+
+                if (truncated && lines.length) {
+                    let lastLine = lines[2] || '';
+                    while (lastLine && this.textWidth(`${lastLine}…`) > maxWidth) {
+                        lastLine = Array.from(lastLine).slice(0, -1).join('');
+                    }
+                    lines[2] = `${lastLine}…`;
+                }
+
+                const width = Math.min(maxWidth, Math.max(...lines.map((line) => this.textWidth(line))));
+                this.contents.fontSize = fontSize;
+                return {
+                    lines: lines.slice(0, 3),
+                    width,
+                    height: lines.slice(0, 3).length * this.descriptionLineHeight(),
+                };
+            }
+
+            /**
+             * 説明文のフォントサイズ
+             * @returns {number}
+             */
+            descriptionFontSize() {
+                return Math.max(14, Math.floor(this.baseFontSize() * 0.55));
+            }
+
+            /**
+             * 説明文の行の高さ
+             * @returns {number}
+             */
+            descriptionLineHeight() {
+                return this.descriptionFontSize() * 1.25;
+            }
+
+            /**
+             * 本文と説明文の間隔
+             * @returns {number}
+             */
+            descriptionSpacing() {
+                return 2;
             }
 
             /**

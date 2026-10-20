@@ -328,6 +328,7 @@
             const notifyItem = new Torigoya.NotifyMessage.NotifyItem({
                 message: template.replace(/\\count/, count).replace(/\\name/, item.name),
                 icon: item.iconIndex,
+                description: item.description,
                 note: '<type:gainItem>',
             });
             Torigoya.NotifyMessage.Manager.notify(notifyItem);
