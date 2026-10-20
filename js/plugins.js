@@ -16,7 +16,7 @@ var $plugins =
 {"name":"Skill/NUUN_PassiveSkill","status":true,"description":"パッシブスキル","parameters":{"PassiveSkillConditions":"","CondBasePassive":"false","PassiveSkillType":"5","EquipScreenCacheEnabled":"true"}},
 {"name":"Extend/DarkPlasma_CertainHitAction","status":false,"description":"スキルやアイテムを必中・反撃無視・反射無視にする","parameters":{}},
 {"name":"Equip/DarkPlasma_ClearEquip","status":true,"description":"装備をすべてはずす","parameters":{"clearEquipWhenMemberIsOut":"true"}},
-{"name":"Equip/NRP_EquipSlot","status":true,"description":"v1.14 装備スロットを自由に変更。","parameters":{"DefaultEquipSlots":"[\"1\",\"1\",\"4\",\"3\",\"2\",\"5\",\"6\",\"6\",\"6\",\"6\",\"6\",\"6\"]","AdjustInitEquip":"true","DualWieldPosition":"2","PagingEquipmentType":"","EquipSlotUnlockItems":"[]","StatusShowSlots":"[\"0\"]","ArmorTypeUnique":"false","ArmorUnique":"false","<For NRP_EquipItem>":"","ItemUnique":"false"}},
+{"name":"Equip/NRP_EquipSlot","status":true,"description":"v1.14 装備スロットを自由に変更。","parameters":{"DefaultEquipSlots":"[\"1\",\"1\",\"4\",\"3\",\"2\",\"5\",\"6\",\"6\",\"6\",\"6\"]","AdjustInitEquip":"true","DualWieldPosition":"2","PagingEquipmentType":"","EquipSlotUnlockItems":"[]","StatusShowSlots":"[\"0\"]","ArmorTypeUnique":"false","ArmorUnique":"false","<For NRP_EquipItem>":"","ItemUnique":"false"}},
 {"name":"State/NUUN_StateTurnCount","status":true,"description":"ステート経過ターンカウント","parameters":{"StateTurnReset":"false"}},
 {"name":"State/NUUN_AddStateDeviation","status":true,"description":"ステート付与の仕様変更、拡張","parameters":{"AddNormalStateMode":"1"}},
 {"name":"State/NUUN_StateBuffTurnPlus","status":false,"description":"ステート、バフターン数増減特徴","parameters":{}},
@@ -114,6 +114,6 @@ var $plugins =
 {"name":"EnemyNightPower","status":true,"description":"夜になると敵のステータスを設定倍率にします。","parameters":{"Multiplier":"10","NightSwitch":"1"}},
 {"name":"EnemySelectHitRate","status":true,"description":"敵選択ウィンドウで敵名の横に命中率を表示します。","parameters":{"Format":"%1%","TextColor":"0","ShowCertainHit":"true"}},
 {"name":"EventQuarterScale","status":false,"description":"指定したメモタグのイベント画像をフィールドマップ上で縮小します。","parameters":{"NoteTag":"QuarterScale","Scale":"0.8"}},
-{"name":"MapRockBreaking","status":true,"description":"マップ上でSVモーションを使って岩破壊・草木採取を行います。","parameters":{"HammerWeaponId":"154","HammerWeaponImageId":"4"}},
+{"name":"MapRockBreaking","status":true,"description":"マップ上でSVモーションを使って岩破壊・草木採取を行います。","parameters":{"HammerWeaponId":"154","HammerWeaponImageId":"4","BombItemId":"134"}},
 {"name":"EnemyEscapeSkill","status":true,"description":"敵が特殊効果「逃げる」のスキルを使ったとき、成功率と結果を戦闘ログに表示し、成功時は戦闘を中断します。(v1.0.0)","parameters":{"MinRate":"10","MaxRate":"100","TryFormat":"%1は逃げ出そうとした！（成功率 %2%）","SuccessFormat":"%1は逃げ出した！","FailureFormat":"しかし%1は逃げられなかった！","AbortMessage":"逃げられてしまった・・・"}}
 ];

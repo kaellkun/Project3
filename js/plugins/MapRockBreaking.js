@@ -20,6 +20,12 @@
  * @min 1
  * @default 4
  *
+ * @param BombItemId
+ * @text 岩破壊用消費アイテムID
+ * @desc ハンマー未所持でも、このアイテムを1個消費して岩を破壊できます。0で無効。
+ * @type item
+ * @default 134
+ *
  * @command AdvanceDay
  * @text 日付を進める（旧コマンド）
  * @desc 互換用です。新規設定ではMapTypeCommonEventの「日付を進めて日次アイテムを再ポップ」を使用してください。
@@ -34,6 +40,10 @@
  * モーションと同時にセルフスイッチAをONにします。草木採取は短剣のSV武器画像を使います。
  * 対象の相対位置から上下左右の向き・左右反転とアクション位置を調整します。
  * モーション速度は通常より速く、演出は約12フレームで完了します。
+ *
+ * ハンマーを持っていなくても、プラグインパラメータ「岩破壊用消費アイテムID」
+ * （初期値134：ミニ爆弾）を所持していれば、1個消費して岩を破壊できます。
+ * ハンマーを所持している場合は消費しません。
  *
  * 破壊後の見た目は、セルフスイッチAを条件にした2ページ目で設定します
  * （画像なし・すり抜け等）。
@@ -64,6 +74,7 @@
     const parameters = PluginManager.parameters('MapRockBreaking');
     const hammerWeaponId = Number(parameters.HammerWeaponId || 154);
     const hammerWeaponImageId = Math.max(1, Number(parameters.HammerWeaponImageId || 4));
+    const bombItemId = Number(parameters.BombItemId || 0);
     const motionSpeed = 3;
     const motionDuration = 12;
     const bitmapLoadTimeout = 45;
@@ -299,15 +310,37 @@
             return;
         }
         const requiredWeapon = rock.weaponId > 0 ? $dataWeapons[rock.weaponId] : null;
-        if (rock.weaponId > 0 && (!requiredWeapon || !$gameParty.hasItem(requiredWeapon, true))) {
+        const bomb = bombItemId > 0 ? $dataItems[bombItemId] : null;
+        const hasWeapon = rock.weaponId <= 0 ||
+            (requiredWeapon && $gameParty.hasItem(requiredWeapon, true));
+        const useBomb = !hasWeapon && bomb && $gameParty.hasItem(bomb);
+        if (!hasWeapon && !useBomb) {
             handleMissingWeapon(this, requiredWeapon ? requiredWeapon.name : '必要なハンマー',
                 rock.commonEventId);
             return;
         }
-        const started = startFieldAction(this, svMotionTypeForWeaponType(18),
-            weaponImageIdForWeaponType(18), () => {});
-        if (!started) return _Game_Event_start.apply(this, arguments);
-        $gameSelfSwitches.setValue(selfSwitchKey, true);
+        const breakRock = () => {
+            if (useBomb && !$gameParty.hasItem(bomb)) return;
+            const started = startFieldAction(this, svMotionTypeForWeaponType(18),
+                weaponImageIdForWeaponType(18), () => {});
+            if (!started) return _Game_Event_start.apply(this, startArgs);
+            if (useBomb) {
+                $gameParty.loseItem(bomb, 1);
+                SoundManager.playUseItem();
+            }
+            $gameSelfSwitches.setValue(selfSwitchKey, true);
+        };
+        if (useBomb) {
+            if ($gameMessage.isBusy()) return;
+            $gameMessage.add(`ハンマーがない。\\C[2]${bomb.name}\\C[0]を1個使って壊しますか？` +
+                `（所持数：${$gameParty.numItems(bomb)}）`);
+            $gameMessage.setChoices(['使う', 'やめる'], 1, 1);
+            $gameMessage.setChoiceBackground(0);
+            $gameMessage.setChoicePositionType(2);
+            $gameMessage.setChoiceCallback(n => { if (n === 0) breakRock(); });
+            return;
+        }
+        breakRock();
     };
 
     const _Game_Player_canMove = Game_Player.prototype.canMove;
