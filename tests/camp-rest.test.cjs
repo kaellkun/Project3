@@ -99,6 +99,18 @@ test("CampRest registration is enabled with the project meat defaults", () => {
     assert.equal(plugin.parameters.HpRecoveryRate, "25");
 });
 
+test("Goblin drops hard monster meat with a lower campfire recovery rate", () => {
+    const items = JSON.parse(fs.readFileSync("data/Items.json", "utf8"));
+    const enemies = JSON.parse(fs.readFileSync("data/Enemies.json", "utf8"));
+
+    assert.equal(items[2].name, "良質な魔物の肉");
+    assert.match(items[2].note, /<CampRestHpRate:25>/);
+    assert.equal(items[89].name, "硬めの魔物の肉");
+    assert.match(items[89].note, /<CampRestHpRate:10>/);
+    assert.ok(enemies[2].dropItems.some(drop => drop.kind === 1 && drop.dataId === 89));
+    assert.ok(!enemies[2].dropItems.some(drop => drop.kind === 1 && drop.dataId === 2));
+});
+
 test("CampRest contains tagged meat support, quantity confirmation, and MP recovery", () => {
     assert.match(pluginSource, /<CampRestMeat>/);
     assert.match(pluginSource, /この内容で休憩する/);
@@ -426,7 +438,8 @@ test("CampRest rejects invalid HP tags before consuming inventory", () => {
 
 test("project foods have explicit HP tags and antidotes retain their single-target effects", () => {
     const items = JSON.parse(fs.readFileSync("data/Items.json", "utf8"));
-    for (const id of [2, 65, 89]) assert.match(items[id].note, /<CampRestHpRate:25>/);
+    for (const id of [2, 65]) assert.match(items[id].note, /<CampRestHpRate:25>/);
+    assert.match(items[89].note, /<CampRestHpRate:10>/);
     for (const [id, stateId] of [[9, 11], [78, 5]]) {
         assert.match(items[id].note, /<CampRestHpRate:0>/);
         assert.equal(items[id].scope, 7);

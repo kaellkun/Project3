@@ -7,6 +7,21 @@
 味方の歩行グラフィック・敵画像（Ａ/Ｂ付き）による小さな行動順予測を戦闘画面に表示します。
 設定・例外・互換性は [ATBの説明](docs/linear-time-battle.md) を参照してください。
 
+## 村の東側の装備
+
+ワールドマップの村の東側に、既存のキラキラと同じ接触式・一度限りの拾得イベントを配置しています。
+
+- (172, 122)：さざ波の杖（武器205）。MAT+50（固定値）、装備中は「全体魔法攻撃（弱）」（スキル237）が使用可能。
+  敵全体にMAT×1倍の魔法属性攻撃、MP25、1回攻撃です。
+- (173, 123)：忍び足の靴（防具208）。誰かが装備中はパーティ全体のランダムエンカウント歩数+2（重複なし）。
+  控えのメンバーの装備も対象で、所持しているだけでは効果はありません。
+
+[EquipmentEncounterSteps](js/plugins/EquipmentEncounterSteps.js) を
+[LL_EncounterAdjust](js/plugins/Encount/LL_EncounterAdjust.js) より下で有効化しています。
+装備のメモ欄の `<EncounterStepPlusTwo>` で判定し、従来の歩数抽選後に2を加算します。
+現在のカウントも次の一歩で差分補正するため、付け外しで残り歩数をリセット・累積できません。
+既存セーブにも適用され、茂み・エンカウント半減・乗り物・エンカウント無効の仕様は維持します。
+
 ## 麻痺
 
 [ParalysisActionChance](js/plugins/State/ParalysisActionChance.js) により、
