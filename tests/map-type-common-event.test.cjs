@@ -769,7 +769,8 @@ test('v2 real LN receives numeric ID/duration and boolean false without calling 
             assert.deepEqual(Object.keys(call.args).sort(), ['duration', 'filterId', 'wait']);
         }
         assert.deepEqual(interpreterWaits, []);
-        assert.equal(filterRequests.length, 7); // index + six real project presets
+        assert.equal(filterRequests.length,
+            1 + JSON.parse(filterFiles['data/filters/index.json']).filter(Boolean).length);
     `);
 });
 
