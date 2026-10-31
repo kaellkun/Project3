@@ -341,8 +341,7 @@
                 this.push("addText", this.getHierarchyPrefix(target) + text);
             } else if (hpDamage === 0) {
                 // ノーダメージ
-                const text = target.name() + 'に ダメージを与えられなかった！';
-                this.push("addText", this.getHierarchyPrefix(target) + text);
+                this.push("addText", this.getHierarchyPrefix(target) + 'ダメージ0！');
             }
         }
     };

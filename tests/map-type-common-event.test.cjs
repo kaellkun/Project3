@@ -756,7 +756,7 @@ test('v2 invalid command arguments fail before state or output variables are par
 
 test('v2 real LN receives numeric ID/duration and boolean false without calling interpreter.wait', () => {
     setup({ filters: true, parameters: { DefaultDayFilter: '1', DefaultNightFilter: '5' } })(`
-        initial('<FilmicFilter:none>'); expectFilter(1);
+        initial(); expectFilter(1);
         assert.equal(filterCalls.length, 2); // setup and map start
         command('StartNight'); expectFilter(5);
         command('Morning'); expectFilter(1);
@@ -779,9 +779,14 @@ for (const [label, parameters, rules, note, day, night] of [
     ['map fallback', {}, [], '<FilmicFilter:3>', 3, 3],
     ['map none fallback', {}, [], '<FilmicFilter:none>', -1, -1],
     ['map -1 fallback', {}, [], '<FilmicFilter:-1>', -1, -1],
-    ['global day and night', { DefaultDayFilter: '1', DefaultNightFilter: '5' }, [], '<FilmicFilter:3>', 1, 5],
-    ['rule overrides global', { DefaultDayFilter: '3', DefaultNightFilter: '6' },
-        [{ MapType: '街', DayFilter: '1', NightFilter: '5' }], '<マップ種別:街><FilmicFilter:4>', 1, 5],
+    ['map filter overrides global day but night still uses global night',
+        { DefaultDayFilter: '1', DefaultNightFilter: '5' }, [], '<FilmicFilter:3>', 3, 5],
+    ['map filter overrides type-specific day; type night still applies', { DefaultDayFilter: '3', DefaultNightFilter: '6' },
+        [{ MapType: '街', DayFilter: '1', NightFilter: '5' }], '<マップ種別:街><FilmicFilter:4>', 4, 5],
+    ['map filter overrides type-specific day',
+        { DefaultDayFilter: '3', DefaultNightFilter: '6' },
+        [{ MapType: 'ダンジョン', DayFilter: '1', NightFilter: '5' }],
+        '<マップ種別:ダンジョン><FilmicFilter:8>', 8, 5],
     ['rule sentinel inherits globals', { DefaultDayFilter: '1', DefaultNightFilter: '5' },
         [{ MapType: '街', DayFilter: '-2', NightFilter: '-2' }], '<MapType:街>', 1, 5],
     ['night sentinel inherits resolved rule day', {}, [{ MapType: '街', DayFilter: '4' }], '<MapType:街>', 4, 4],
@@ -878,8 +883,8 @@ for (const blocker of ['battle scene', 'party in battle', 'transfer', 'scene cha
             assert.equal(filterCalls.length, count);
             $gameParty._inBattle = false; SceneManager.changing = false;
             if (blocker === 'transfer') {
-                $gamePlayer.performTransfer(); expectFilter(1); // indoor inherits global daytime
-                start(); expectFilter(1);
+                $gamePlayer.performTransfer(); expectFilter(4); // map-specific daytime filter wins
+                start(); expectFilter(4);
                 transfer(12, '<MapType:ワールドマップ>');
             } else start(Scene_Battle);
             expectFilter(5); expectState(true, 3, 0, 1);

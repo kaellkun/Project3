@@ -41,6 +41,12 @@
  * @type string
  * @default 施設前
  *
+ * @param Categories
+ * @text 移動先カテゴリ
+ * @type struct<FastTravelCategory>[]
+ * @default []
+ * @desc 移動先の分類に使うカテゴリIDと表示名を指定します。
+ *
  * @help
  * マップイベントのメモ欄に <CampRestPoint> を指定すると、イベント起動時に
  * 焚き火を訪問済みとして登録します。休憩せずセーブだけ・キャンセルでも登録されます。
@@ -52,6 +58,24 @@
  * 対象アイテムはパラメータのID、またはアイテムのメモ欄に <FastTravel> を指定します。
  * 移動先を決定した時だけアイテムを1個消費します。キャンセル時は消費しません。
  * マップイベント名を初期値（EV001など）から変更すると、その名前を移動先名に使用します。
+ *
+ * カテゴリはプラグインパラメータでIDと表示名を定義し、イベントのメモ欄に
+ * <FastTravelCategory: id1,id2> の形式で設定します。複数のカテゴリIDを指定できます。
+ * 焚き火・ドアのどちらも、移動先を記録するイベントのメモ欄を参照します。
+ * カテゴリを定義すると、場所選択の前にカテゴリを選ぶ画面が表示されます。
+ * 「すべて」からは、カテゴリ未設定の移動先を含む全ての場所を選べます。
+ */
+
+/*~struct~FastTravelCategory:
+ * @param Id
+ * @text カテゴリID
+ * @type string
+ * @default category
+ *
+ * @param Name
+ * @text 表示名
+ * @type string
+ * @default カテゴリ
  */
 
 (() => {
@@ -69,6 +93,11 @@
     const campfireLabel = String(parameters.CampfireLabel || "焚き火");
     const innLabel = String(parameters.InnLabel || "宿屋");
     const doorLabel = String(parameters.DoorLabel || "施設前");
+    const categories = JSON.parse(parameters.Categories || "[]")
+        .map(category => JSON.parse(category))
+        .filter(category => category.Id && category.Name)
+        .map(category => ({ id: String(category.Id).trim(), name: String(category.Name) }))
+        .filter(category => category.id);
 
     const _Game_System_initMembers = Game_System.prototype.initMembers;
     Game_System.prototype.initMembers = function() {
@@ -89,8 +118,35 @@
             && saved.mapId === location.mapId
             && saved.x === location.x
             && saved.y === location.y);
-        if (!exists) locations.push(location);
+        if (exists) {
+            const saved = locations.find(entry => entry.type === location.type
+                && entry.mapId === location.mapId
+                && entry.x === location.x
+                && entry.y === location.y);
+            if (location.categories && location.categories.length > 0) {
+                saved.categories = [...new Set([
+                    ...(Array.isArray(saved.categories) ? saved.categories : []),
+                    ...location.categories
+                ])];
+            }
+        } else {
+            locations.push(location);
+        }
     };
+
+    function eventCategoryIds(eventId) {
+        const event = typeof $dataMap !== "undefined" && $dataMap.events
+            ? $dataMap.events[eventId]
+            : null;
+        if (!event || !event.note) return [];
+        const categoryIds = [];
+        const tagPattern = /<FastTravelCategory\s*:\s*([^>]+)>/gi;
+        let match;
+        while ((match = tagPattern.exec(event.note))) {
+            categoryIds.push(...match[1].split(",").map(id => id.trim()).filter(Boolean));
+        }
+        return [...new Set(categoryIds)];
+    }
 
     Game_System.prototype.recordGoddessFeatherLocation = function(type, eventId) {
         if (!$gameMap || !$gamePlayer) return;
@@ -109,6 +165,8 @@
                 ? $dataMapInfos[$gameMap.mapId()].name
                 : `マップ${$gameMap.mapId()}`
         };
+        const categoryIds = eventCategoryIds(eventId);
+        if (categoryIds.length > 0) location.categories = categoryIds;
         if (eventName) location.eventName = eventName;
         this.addGoddessFeatherLocation(location);
     };
@@ -146,6 +204,8 @@
                 ? $dataMapInfos[mapId].name
                 : `マップ${mapId}`
         };
+        const categoryIds = eventCategoryIds(eventId);
+        if (categoryIds.length > 0) location.categories = categoryIds;
         if (eventName) location.eventName = eventName;
         this.addGoddessFeatherLocation(location);
     };
@@ -206,6 +266,11 @@
             super.initialize(rect);
         }
 
+        setLocations(locations) {
+            this._locations = locations;
+            this.refresh();
+        }
+
         makeCommandList() {
             const labels = { campfire: campfireLabel, inn: innLabel, door: doorLabel };
             const typeCounts = {};
@@ -216,6 +281,16 @@
                 const number = typeCounts[location.type];
                 const placeName = location.eventName || `${label} ${number}`;
                 this.addCommand(`${placeName}：${mapName} (${location.x},${location.y})`, "travel", true, location);
+            }
+            this.addCommand("戻る", "cancel");
+        }
+    }
+
+    class Window_GoddessFeatherCategory extends Window_Command {
+        makeCommandList() {
+            this.addCommand("すべて", "category", true, null);
+            for (const category of categories) {
+                this.addCommand(category.name, "category", true, category.id);
             }
             this.addCommand("戻る", "cancel");
         }
@@ -232,12 +307,51 @@
                 Graphics.boxWidth,
                 this.mainAreaHeight()
             );
-            this._travelWindow = new Window_GoddessFeatherTravel(rect, $gameSystem.goddessFeatherLocations());
+            const locations = $gameSystem.goddessFeatherLocations();
+            this._travelWindow = new Window_GoddessFeatherTravel(rect, locations);
             this._travelWindow.setHandler("travel", this.onTravel.bind(this));
-            this._travelWindow.setHandler("cancel", this.popScene.bind(this));
+            this._travelWindow.setHandler("cancel", this.onLocationCancel.bind(this));
             this.addWindow(this._travelWindow);
+            if (categories.length > 0) {
+                this._categoryWindow = new Window_GoddessFeatherCategory(rect);
+                this._categoryWindow.setHandler("category", this.onCategory.bind(this));
+                this._categoryWindow.setHandler("cancel", this.popScene.bind(this));
+                this.addWindow(this._categoryWindow);
+                this._travelWindow.hide();
+                this._travelWindow.deactivate();
+                this._categoryWindow.activate();
+                this._categoryWindow.select(0);
+            } else {
+                this._travelWindow.activate();
+                this._travelWindow.select(0);
+            }
+        }
+
+        onCategory() {
+            const categoryId = this._categoryWindow.currentExt();
+            const locations = $gameSystem.goddessFeatherLocations();
+            const filteredLocations = categoryId === null
+                ? locations
+                : locations.filter(location => Array.isArray(location.categories)
+                    && location.categories.includes(categoryId));
+            this._travelWindow.setLocations(filteredLocations);
+            this._categoryWindow.hide();
+            this._categoryWindow.deactivate();
+            this._travelWindow.show();
             this._travelWindow.activate();
             this._travelWindow.select(0);
+        }
+
+        onLocationCancel() {
+            if (!this._categoryWindow) {
+                this.popScene();
+                return;
+            }
+            this._travelWindow.hide();
+            this._travelWindow.deactivate();
+            this._categoryWindow.show();
+            this._categoryWindow.activate();
+            this._categoryWindow.select(0);
         }
 
         onTravel() {

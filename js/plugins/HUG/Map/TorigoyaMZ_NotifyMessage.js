@@ -652,7 +652,7 @@
                 const y = messageRect.y + messageRect.height + this.descriptionSpacing();
                 const lineHeight = this.descriptionLineHeight();
                 for (let i = 0; i < layout.lines.length; i++) {
-                    this.drawText(layout.lines[i], x, y + i * lineHeight, layout.width, 'left');
+                    this.drawTextEx(layout.lines[i], x, y + i * lineHeight, layout.width);
                 }
 
                 this.contents.fontSize = fontSize;
@@ -676,20 +676,33 @@
                 const lines = [];
                 let truncated = false;
                 const paragraphs = String(description).split(/\r?\n/);
+                const colorCodePattern = /\\c\[\d+\]/gi;
+                const visibleText = (text) => text.replace(colorCodePattern, '');
                 outer: for (let paragraphIndex = 0; paragraphIndex < paragraphs.length; paragraphIndex++) {
                     const paragraph = paragraphs[paragraphIndex];
                     let line = '';
-                    for (const character of Array.from(paragraph)) {
-                        if (line && this.textWidth(line + character) > maxWidth) {
-                            if (lines.length === 2) {
+                    let visibleLine = '';
+                    const parts = paragraph.split(/(\\c\[\d+\])/gi);
+                    for (const part of parts) {
+                        if (!part) continue;
+                        if (/^\\c\[\d+\]$/i.test(part)) {
+                            line += part;
+                            continue;
+                        }
+                        for (const character of Array.from(part)) {
+                            if (visibleLine && this.textWidth(visibleLine + character) > maxWidth) {
+                                if (lines.length === 2) {
+                                    lines.push(line);
+                                    truncated = true;
+                                    break outer;
+                                }
                                 lines.push(line);
-                                truncated = true;
-                                break outer;
+                                line = character;
+                                visibleLine = character;
+                            } else {
+                                line += character;
+                                visibleLine += character;
                             }
-                            lines.push(line);
-                            line = character;
-                        } else {
-                            line += character;
                         }
                     }
                     if (lines.length === 2 && paragraphIndex < paragraphs.length - 1) {
@@ -706,13 +719,23 @@
 
                 if (truncated && lines.length) {
                     let lastLine = lines[2] || '';
-                    while (lastLine && this.textWidth(`${lastLine}…`) > maxWidth) {
-                        lastLine = Array.from(lastLine).slice(0, -1).join('');
+                    while (visibleText(lastLine) && this.textWidth(visibleText(`${lastLine}…`)) > maxWidth) {
+                        const parts = lastLine.split(/(\\c\[\d+\])/gi);
+                        for (let i = parts.length - 1; i >= 0; i--) {
+                            if (parts[i] && !/^\\c\[\d+\]$/i.test(parts[i])) {
+                                parts[i] = Array.from(parts[i]).slice(0, -1).join('');
+                                break;
+                            }
+                        }
+                        lastLine = parts.join('');
                     }
                     lines[2] = `${lastLine}…`;
                 }
 
-                const width = Math.min(maxWidth, Math.max(...lines.map((line) => this.textWidth(line))));
+                const width = Math.min(
+                    maxWidth,
+                    Math.max(...lines.map((line) => this.textWidth(visibleText(line)))),
+                );
                 this.contents.fontSize = fontSize;
                 return {
                     lines: lines.slice(0, 3),

@@ -16,6 +16,7 @@ const helperSource = source.slice(functionStart, functionEnd);
 function loadGetSkillName(targets) {
     const context = vm.createContext({
         dataToBattler: data => targets[data.index],
+        isForAllAction: action => action.isForAll() || action.isForEveryone(),
         getPredictionCfg: (_battler, _key, _defaultValue, action) => action.displayName || ''
     });
     vm.runInContext(helperSource, context);
@@ -26,7 +27,9 @@ function makeAction() {
     return {
         item: () => ({ name: '攻撃' }),
         itemHit: () => 0.9,
-        itemEva: target => target.eva
+        itemEva: target => target.eva,
+        isForAll: () => false,
+        isForEveryone: () => false
     };
 }
 
@@ -77,6 +80,21 @@ test('custom skill label and RIT hit-rate result are preserved', () => {
     assert.equal(
         loadGetSkillName(targets)(action, makeBattler(action, [0])),
         '特殊攻撃（対象: アクターA 命中率: 37%）'
+    );
+});
+
+test('all-target actions show 全体 instead of listing every target name', () => {
+    const targets = [
+        { name: () => 'アクターA', eva: 0.1, isAlive: () => true },
+        { name: () => 'アクターB', eva: 0.4, isAlive: () => true }
+    ];
+    const action = makeAction();
+    action.isForAll = () => true;
+    const getSkillName = loadGetSkillName(targets);
+
+    assert.equal(
+        getSkillName(action, makeBattler(action, [0, 1])),
+        '攻撃（対象: 全体 命中率: 54〜81%）'
     );
 });
 

@@ -198,7 +198,7 @@
  * マップ種別の入場コモンと日次リポップは引き続き動作します。日付を進める場合は
  * 「日付を進めて日次アイテムを再ポップ」を使用してください。
  * 種別設定で「昼の番号」「夜の番号」を設定。-2は標準設定を継承します。
- * 昼の優先順：種別の昼 → 昼の標準 → マップの<FilmicFilter:番号> → 0。
+ * 昼の優先順：マップの<FilmicFilter:番号> → 種別の昼 → 昼の標準 → 0。
  * 夜の優先順：種別の夜 → 夜の標準 → そのマップの昼。
  * -1はフィルター無効、0は番号0のフィルター（無効ではありません）。
  * 「夜の影響を除外」がONなら夜も昼用を使用。屋内は初期設定でONです。
@@ -514,10 +514,12 @@
         const meta = $dataMap.meta || {};
         // 同種別の複数登録はコモンのみ全件実行。見た目には先頭の設定を使用。
         const rule = rules.find(entry => entry.mapType === currentMapType());
-        const mapDefault = meta.FilmicFilter === 'none' ? -1 :
-            integer(meta.FilmicFilter, 0, -1, 'マップのFilmicFilter');
-        let day = rule && rule.dayFilter !== -2 ? rule.dayFilter : dayFilter;
-        if (day === -2) day = mapDefault;
+        const mapDefault = meta.FilmicFilter === undefined ? -2 :
+            meta.FilmicFilter === 'none' ? -1 :
+                integer(meta.FilmicFilter, 0, -1, 'マップのFilmicFilter');
+        let day = mapDefault !== -2 ? mapDefault :
+            rule && rule.dayFilter !== -2 ? rule.dayFilter : dayFilter;
+        if (day === -2) day = 0;
         const indoors = meta['屋内'] !== undefined || (rule ? rule.excludeNight : currentMapType() === '屋内');
         if (!isNight() || indoors) return day;
         const night = rule && rule.nightFilter !== -2 ? rule.nightFilter : nightFilter;

@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 
-function createContext(beforePlugin = () => {}) {
+function createContext(beforePlugin = () => {}, pluginParameters = {}) {
     class Game_System {
         initMembers() {}
     }
@@ -51,11 +51,29 @@ function createContext(beforePlugin = () => {}) {
 
         initialize(rect) {
             this.rect = rect;
+            this.refresh();
         }
 
-        setHandler() {}
-        activate() {}
-        select() {}
+        refresh() {
+            this._list = [];
+            this.makeCommandList();
+        }
+
+        addCommand(name, symbol, enabled = true, ext = null) {
+            this._list.push({ name, symbol, enabled, ext });
+        }
+
+        setHandler(symbol, handler) {
+            this._handlers = this._handlers || {};
+            this._handlers[symbol] = handler;
+        }
+
+        activate() { this.active = true; }
+        deactivate() { this.active = false; }
+        show() { this.visible = true; }
+        hide() { this.visible = false; }
+        select(index) { this._index = index; }
+        currentExt() { return this._list[this._index].ext; }
     }
     class Scene_MenuBase {
         create() {}
@@ -108,7 +126,9 @@ function createContext(beforePlugin = () => {}) {
                 return {
                     FastTravelItemIds: "6,56",
                     CampfireCommonEventId: "4",
-                    InnCommonEventId: "3"
+                    InnCommonEventId: "3",
+                    Categories: "[]",
+                    ...pluginParameters
                 };
             }
         },
@@ -229,7 +249,9 @@ test("autorun transfer events do not create door destinations", () => {
 
 test("tagged event activation records a named campfire before any save or rest choice", () => {
     const context = createContext();
-    context.$dataMap = { events: { 5: { name: "森の焚き火" } } };
+    context.$dataMap = {
+        events: { 5: { name: "森の焚き火", note: "<FastTravelCategory: town, forest>" } }
+    };
     const event = new context.Game_Event(5, "<CampRestPoint>");
 
     event.start();
@@ -237,7 +259,15 @@ test("tagged event activation records a named campfire before any save or rest c
     assert.equal(event._starting, true);
     assert.deepEqual(
         JSON.parse(JSON.stringify(context.$gameSystem.goddessFeatherLocations())),
-        [{ type: "campfire", mapId: 12, x: 7, y: 9, mapName: "森", eventName: "森の焚き火" }]
+        [{
+            type: "campfire",
+            mapId: 12,
+            x: 7,
+            y: 9,
+            mapName: "森",
+            categories: ["town", "forest"],
+            eventName: "森の焚き火"
+        }]
     );
     assert.deepEqual(context.$gameTemp._commonEventQueue, []);
 });
@@ -309,4 +339,79 @@ test("fast travel scene creates its window from the menu main-area bounds", () =
         { x: 0, y: 72, width: 816, height: 432 }
     );
     assert.equal(scene.addedWindow, scene._travelWindow);
+});
+
+test("travel destination categories are read from transfer-event notes", () => {
+    const context = createContext();
+    context.$dataMap = {
+        events: { 5: { name: "町の入口", note: "<FastTravelCategory: town, town>" } }
+    };
+    new context.Game_Event(5, "", [
+        { code: 201, parameters: [0, 31, 8, 14, 0, 0] },
+        { code: 0 }
+    ], 1);
+    const interpreter = new context.Game_Interpreter();
+    interpreter._eventId = 5;
+
+    interpreter.command201([0, 31, 8, 14, 0, 0]);
+
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(context.$gameSystem.goddessFeatherLocations()[0].categories)),
+        ["town"]
+    );
+});
+
+test("category selection filters destinations and all retains uncategorized locations", () => {
+    const serializedCategories = JSON.stringify([
+        JSON.stringify({ Id: "town", Name: "町" }),
+        JSON.stringify({ Id: "forest", Name: "森" })
+    ]);
+    const context = createContext(() => {}, { Categories: serializedCategories });
+    context.$gameSystem.addGoddessFeatherLocation({
+        type: "campfire", mapId: 1, x: 1, y: 1, categories: ["forest"]
+    });
+    context.$gameSystem.addGoddessFeatherLocation({
+        type: "door", mapId: 2, x: 2, y: 2, categories: ["town", "forest"]
+    });
+    context.$gameSystem.addGoddessFeatherLocation({
+        type: "inn", mapId: 3, x: 3, y: 3
+    });
+
+    const sceneItem = new context.Scene_Item();
+    sceneItem.useItem();
+    const scene = new context.SceneManager.pushedScene();
+    scene.create();
+
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(scene._categoryWindow._list.map(command => command.name))),
+        ["すべて", "町", "森", "戻る"]
+    );
+    scene._categoryWindow.select(1);
+    scene.onCategory();
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(scene._travelWindow._locations.map(location => location.mapId))),
+        [2]
+    );
+
+    scene._categoryWindow.select(0);
+    scene.onCategory();
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(scene._travelWindow._locations.map(location => location.mapId))),
+        [1, 2, 3]
+    );
+});
+
+test("revisiting a destination adds categories without duplicating it", () => {
+    const context = createContext();
+    const location = { type: "campfire", mapId: 12, x: 7, y: 9 };
+
+    context.$gameSystem.addGoddessFeatherLocation({ ...location, categories: ["town"] });
+    context.$gameSystem.addGoddessFeatherLocation({ ...location, categories: ["forest", "town"] });
+
+    const savedLocations = context.$gameSystem.goddessFeatherLocations();
+    assert.equal(savedLocations.length, 1);
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(savedLocations[0].categories)),
+        ["town", "forest"]
+    );
 });

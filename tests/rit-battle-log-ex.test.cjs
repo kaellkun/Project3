@@ -32,6 +32,7 @@ function setupLog() {
         window: {}
     };
     vm.runInNewContext(plugin, context, { filename: 'RIT_BattleLogEx.js' });
+    context.Window_BattleLog.context = context;
     return context.Window_BattleLog;
 }
 
@@ -65,4 +66,39 @@ test('non-death state does not schedule collapse', () => {
     }, target);
 
     assert.deepEqual(commands, []);
+});
+
+test('zero HP damage displays a concise zero-damage message', () => {
+    const Window_BattleLog = setupLog();
+    const commands = [];
+    const target = {
+        result: () => ({ hpAffected: true, hpDamage: 0 })
+    };
+
+    Window_BattleLog.prototype.displayHpDamage.call({
+        push: (...args) => commands.push(args),
+        getHierarchyPrefix: () => ''
+    }, target);
+
+    assert.deepEqual(commands, [['addText', 'ダメージ0！']]);
+});
+
+test('evasion displays the configured ordinary attack-evaded message', () => {
+    const Window_BattleLog = setupLog();
+    const commands = [];
+    const target = {
+        result: () => ({ physical: true }),
+        name: () => '対象'
+    };
+    const battleLog = {
+        push: (...args) => commands.push(args),
+        getHierarchyPrefix: () => ''
+    };
+
+    Window_BattleLog.context.TextManager.evasion = {
+        format: name => `${name}は攻撃を避けた！`
+    };
+    Window_BattleLog.prototype.displayEvasion.call(battleLog, target);
+
+    assert.deepEqual(commands, [['addText', '対象は攻撃を避けた！']]);
 });

@@ -56,6 +56,8 @@
  * ◎色々と設定項目が並んでいるが、好きにいじってよい
  * ◎行動ビューにはスキル名と一緒に、予測ターゲットと命中率も表示される
  * 　複数ターゲットで命中率が異なる場合は、最小値〜最大値で表示される
+ * 　全体対象の行動は対象名の代わりに「全体」と表示される
+ * 　表示内容が行動ビューの基本幅を超える場合、内容に合わせて横幅が広がる
  * 
  * 
  * ■【設定4】ターゲットラインの見た目をカスタマイズ
@@ -1643,7 +1645,7 @@
         const minRate = Math.min(...rates);
         const maxRate = Math.max(...rates);
         const rateText = minRate === maxRate ? String(minRate) : `${minRate}〜${maxRate}`;
-        const targetNames = targets.map(target => target.name()).join("、");
+        const targetNames = isForAllAction(action) ? "全体" : targets.map(target => target.name()).join("、");
         return `（対象: ${targetNames} 命中率: ${rateText}%）`;
     };
 
@@ -1660,7 +1662,7 @@
     //- 行動ビューの形成
     function createActView(battlerSprite, battler, actionNum, text) {
         const preSprite = battlerSprite._actWindowKe;
-        if (preSprite && preSprite._actionNum == actionNum) { return; }
+        if (preSprite && preSprite._actionNumKe == actionNum && preSprite._textKe === text) { return; }
         // 前のがあったら破棄
         if (preSprite) {
             destroyActView(preSprite);
@@ -1674,7 +1676,7 @@
         sizes.height += outW;
         // ウインドウ形成
         const padding = tempWindow._padding;
-        const windowWidth = keke_actW + padding * 2;
+        const windowWidth = Math.max(keke_actW, sizes.width) + padding * 2;
         const windowHeight = sizes.height + padding * 2;
         const windo = new Window_ActViewKe({ x:0, y:0, width:windowWidth, height:windowHeight });
         tempWindow.destroy();
@@ -1695,6 +1697,7 @@
         windo._battlerKe = battler;
         // アクション数を保存
         windo._actionNumKe = actionNum;
+        windo._textKe = text;
         // 表示方向を保存
         windo._direKe = pos["表示方向"];
         // 最初は見えない化
