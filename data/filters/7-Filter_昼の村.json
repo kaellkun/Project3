@@ -1,0 +1,22 @@
+{
+  "luminosityThreshold": 0.94,
+  "luminositySmoothWidth": 0.08,
+  "linearWhite": 1.15,
+  "shoulderStrength": 2.2,
+  "linearStrength": 0.45,
+  "linearAngle": 0.02,
+  "toeStrength": 0.75,
+  "toeNumerator": 0.018,
+  "toeDenominator": 1.0,
+  "exposure": 0.78,
+  "toneColorR": -0.08,
+  "toneColorG": -0.11,
+  "toneColorB": -0.16,
+  "toneGray": 0.18,
+  "bloomStrength": 0.08,
+  "bloomRadius": 0.32,
+  "vignetteSize": 0.48,
+  "vignetteAmount": 0.52,
+  "tiltOffset": 0.01,
+  "tiltScale": 0.8
+}

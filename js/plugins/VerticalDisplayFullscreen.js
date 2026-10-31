@@ -38,6 +38,10 @@
  * screen effects can then use the full vertical display area. Top-positioned
  * message windows are anchored to the actual display top; other windows remain
  * centered in the original PC-style UI area.
+ *
+ * Load below Keke_FreeCamera. The portrait map scale is combined with the
+ * camera zoom for focus, map bounds, and touch coordinates. Camera offsets
+ * remain in map pixels, just as on PC; the portrait field of view differs.
  */
 
 (() => {
@@ -134,7 +138,7 @@
     const originalScreenTileX = Game_Map.prototype.screenTileX;
     Game_Map.prototype.screenTileX = function() {
         if (shouldExpand()) {
-            return Math.round((Graphics.width / this.tileWidth() / mapScale) * 16) / 16;
+            return Graphics.width / (this.tileWidth() * mapScale * $gameScreen.zoomScale());
         }
         return originalScreenTileX.call(this);
     };
@@ -142,9 +146,19 @@
     const originalScreenTileY = Game_Map.prototype.screenTileY;
     Game_Map.prototype.screenTileY = function() {
         if (shouldExpand()) {
-            return Math.round((Graphics.height / this.tileHeight() / mapScale) * 16) / 16;
+            return Graphics.height / (this.tileHeight() * mapScale * $gameScreen.zoomScale());
         }
         return originalScreenTileY.call(this);
+    };
+
+    const originalCanvasToMapX = Game_Map.prototype.canvasToMapX;
+    Game_Map.prototype.canvasToMapX = function(x) {
+        return originalCanvasToMapX.call(this, shouldExpand() ? x / mapScale : x);
+    };
+
+    const originalCanvasToMapY = Game_Map.prototype.canvasToMapY;
+    Game_Map.prototype.canvasToMapY = function(y) {
+        return originalCanvasToMapY.call(this, shouldExpand() ? y / mapScale : y);
     };
 
     const originalMessageUpdatePlacement = Window_Message.prototype.updatePlacement;
