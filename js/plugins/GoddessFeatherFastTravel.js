@@ -1,6 +1,6 @@
 /*:
  * @target MZ
- * @plugindesc 女神様の羽根で、訪問済みの焚き火・宿屋へ移動します。
+ * @plugindesc 女神様の羽根で、訪問済みの焚き火・宿屋・ドアへ移動します。
  * @author Project3
  *
  * @param FastTravelItemIds
@@ -36,11 +36,18 @@
  * @type string
  * @default 宿屋
  *
+ * @param DoorLabel
+ * @text ドアの表示名
+ * @type string
+ * @default 施設前
+ *
  * @help
  * マップイベントのメモ欄に <CampRestPoint> を指定すると、イベント起動時に
  * 焚き火を訪問済みとして登録します。休憩せずセーブだけ・キャンセルでも登録されます。
  * 指定したコモンイベントが実行された時点のマップ・座標を訪問済み地点として保存します。
  * 同じ地点は重複登録しません。保存データにも保持されるため、次回ロード後も利用できます。
+ * 起動したイベントに転送コマンドがある場合は、転送先をドアの移動先として記録します。
+ * 決定ボタン・プレイヤー接触・イベント接触で起動するイベントが対象です。
  *
  * 対象アイテムはパラメータのID、またはアイテムのメモ欄に <FastTravel> を指定します。
  * 移動先を決定した時だけアイテムを1個消費します。キャンセル時は消費しません。
@@ -61,6 +68,7 @@
     const windowTitle = String(parameters.WindowTitle || "移動先を選択");
     const campfireLabel = String(parameters.CampfireLabel || "焚き火");
     const innLabel = String(parameters.InnLabel || "宿屋");
+    const doorLabel = String(parameters.DoorLabel || "施設前");
 
     const _Game_System_initMembers = Game_System.prototype.initMembers;
     Game_System.prototype.initMembers = function() {
@@ -73,6 +81,15 @@
             this._goddessFeatherLocations = [];
         }
         return this._goddessFeatherLocations;
+    };
+
+    Game_System.prototype.addGoddessFeatherLocation = function(location) {
+        const locations = this.goddessFeatherLocations();
+        const exists = locations.some(saved => saved.type === location.type
+            && saved.mapId === location.mapId
+            && saved.x === location.x
+            && saved.y === location.y);
+        if (!exists) locations.push(location);
     };
 
     Game_System.prototype.recordGoddessFeatherLocation = function(type, eventId) {
@@ -92,14 +109,53 @@
                 ? $dataMapInfos[$gameMap.mapId()].name
                 : `マップ${$gameMap.mapId()}`
         };
-            if (eventName) location.eventName = eventName;
-        const locations = this.goddessFeatherLocations();
-        const exists = locations.some(saved => saved.type === location.type
-            && saved.mapId === location.mapId
-            && saved.x === location.x
-            && saved.y === location.y);
-        if (!exists) locations.push(location);
+        if (eventName) location.eventName = eventName;
+        this.addGoddessFeatherLocation(location);
     };
+
+    Game_System.prototype.recordGoddessFeatherTransferLocation = function(eventId, params) {
+        if (!$gameMap || !$gamePlayer || !params) return;
+        let mapId;
+        let x;
+        let y;
+        if (Number(params[0]) === 0) {
+            mapId = Number(params[1]);
+            x = Number(params[2]);
+            y = Number(params[3]);
+        } else if (Number(params[0]) === 1 && typeof $gameVariables !== "undefined") {
+            mapId = $gameVariables.value(Number(params[1]));
+            x = $gameVariables.value(Number(params[2]));
+            y = $gameVariables.value(Number(params[3]));
+        }
+        if (!Number.isInteger(mapId) || mapId <= 0
+            || !Number.isInteger(x) || !Number.isInteger(y)) return;
+        const event = $gameMap.event(eventId);
+        if (!event) return;
+        const data = typeof $dataMap !== "undefined" && $dataMap.events
+            ? $dataMap.events[eventId]
+            : null;
+        const eventName = data && data.name && !/^EV\d+$/i.test(data.name)
+            ? data.name
+            : "";
+        const location = {
+            type: "door",
+            mapId,
+            x,
+            y,
+            mapName: $dataMapInfos && $dataMapInfos[mapId]
+                ? $dataMapInfos[mapId].name
+                : `マップ${mapId}`
+        };
+        if (eventName) location.eventName = eventName;
+        this.addGoddessFeatherLocation(location);
+    };
+
+    function isTouchTransferEvent(event) {
+        const page = event.page();
+        return !!page && page.trigger <= 2
+            && Array.isArray(page.list)
+            && page.list.some(command => command.code === 201);
+    }
 
     function recordCommonEventLocation(commonEventId, eventId) {
         if (commonEventId === campfireCommonEventId) {
@@ -131,6 +187,15 @@
         return _Game_Interpreter_command117.apply(this, arguments);
     };
 
+    const _Game_Interpreter_command201 = Game_Interpreter.prototype.command201;
+    Game_Interpreter.prototype.command201 = function(params) {
+        const event = this._eventId > 0 && $gameMap ? $gameMap.event(this._eventId) : null;
+        if (event && isTouchTransferEvent(event)) {
+            $gameSystem.recordGoddessFeatherTransferLocation(this._eventId, params);
+        }
+        return _Game_Interpreter_command201.apply(this, arguments);
+    };
+
     function isFastTravelItem(item) {
         return !!item && (itemIds.includes(item.id) || /<FastTravel>/i.test(item.note || ""));
     }
@@ -142,9 +207,10 @@
         }
 
         makeCommandList() {
-            const typeCounts = { campfire: 0, inn: 0 };
+            const labels = { campfire: campfireLabel, inn: innLabel, door: doorLabel };
+            const typeCounts = {};
             for (const location of this._locations) {
-                const label = location.type === "campfire" ? campfireLabel : innLabel;
+                const label = labels[location.type] || doorLabel;
                 const mapName = location.mapName || `マップ${location.mapId}`;
                 typeCounts[location.type] = (typeCounts[location.type] || 0) + 1;
                 const number = typeCounts[location.type];

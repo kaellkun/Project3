@@ -19,13 +19,22 @@
  * @desc カンマ区切りで指定します。アイテムのメモに<CampRestMeat>を付けても対象になります。
  *
  * @param HpRecoveryRate
- * @text 肉1個のHP回復率
+ * @text HP回復率タグ未設定時の回復率
  * @type number
  * @decimals 0
  * @min 1
  * @max 100
  * @default 25
- * @desc 肉1個で最大HPの何パーセント回復するかを指定します。
+ * @desc 互換用。<CampRestHpRate:25> がない食材に適用します。
+ *
+ * @help
+ * アイテムのメモに <CampRestHpRate:25> を設定すると、
+ * 焚き火用の食材となり、1個で全員の最大HPの25%を回復します（0～100）。
+ * <CampRestMeat> でも食材として登録できます。
+ * 食材の「使用効果」の「ステート解除」は生存中の全員に適用します。
+ * 解除確率は使用効果の設定に従い、使用個数分だけ判定します。
+ * HPを回復しない食材には <CampRestHpRate:0> を指定してください。
+ * 通常使用時の対象・効果は変更しません。
  */
 
 (() => {
@@ -37,7 +46,7 @@
         .split(",")
         .map(Number)
         .filter(id => id > 0);
-    const hpRecoveryRate = Math.max(1, Math.min(100, Number(parameters.HpRecoveryRate || 25))) / 100;
+    const hpRecoveryRate = Math.max(1, Math.min(100, Number(parameters.HpRecoveryRate || 25)));
 
     PluginManager.registerCommand(pluginName, "StartRest", () => {
         SceneManager.push(Scene_CampRest);
@@ -140,12 +149,34 @@
     };
 
     function isCampRestMeat(item) {
-        return !!item && (meatItemIds.includes(item.id) || /<CampRestMeat>/i.test(item.note || ""));
+        return !!item && (meatItemIds.includes(item.id) ||
+            /<CampRestMeat>|<CampRestHpRate\s*:/i.test(item.note || ""));
+    }
+
+    function foodHpRate(item) {
+        const tag = /<CampRestHpRate\s*:([^>]*)>/i.exec(item.note || "");
+        if (!tag) return hpRecoveryRate;
+        const rate = Number(tag[1]);
+        if (!tag[1].trim() || !Number.isFinite(rate) || rate < 0 || rate > 100) {
+            throw new Error(`CampRest: ${item.name} (ID ${item.id}) の CampRestHpRate は0～100で指定してください。`);
+        }
+        return rate;
+    }
+
+    function stateRemovalEffects(item) {
+        return item.effects.filter(effect => effect.code === Game_Action.EFFECT_REMOVE_STATE);
+    }
+
+    function recoveryText(rate, items) {
+        const names = [...new Set(items.flatMap(item =>
+            stateRemovalEffects(item).map(effect => $dataStates[effect.dataId].name)))];
+        const hp = `HP回復 ${Math.min(100, Math.round(rate * 100) / 100)}%`;
+        return names.length > 0 ? `${hp} / 解除: ${names.join("・")}` : hp;
     }
 
     class Window_CampRestCommand extends Window_Command {
         makeCommandList() {
-            this.addCommand("魔物の肉を使う", "meat", this.meatCount() > 0);
+            this.addCommand("食材を使う", "meat", this.meatCount() > 0);
             this.addCommand("使わずに休憩する", "rest");
             this.addCommand("やめる", "cancel");
         }
@@ -159,13 +190,16 @@
     class Window_CampRestItem extends Window_Command {
         initialize(rect, items) {
             this._items = items;
+            this._quantities = new Map();
             super.initialize(rect);
         }
 
         makeCommandList() {
             for (const item of this._items) {
-                this.addCommand(`${item.name}  (${$gameParty.numItems(item)}個)`, "item", true, item);
+                const count = this._quantities.get(item) || 0;
+                this.addCommand(`${item.name}  (${count}/${$gameParty.numItems(item)}個)`, "item", true, item);
             }
+            this.addCommand("選んだ食材で休憩する", "finish", this._quantities.size > 0);
         }
     }
 
@@ -177,25 +211,28 @@
 
         makeCommandList() {
             const max = $gameParty.numItems(this._item);
-            for (let count = 1; count <= max; count++) {
-                const rate = Math.min(100, Math.round(hpRecoveryRate * count * 100));
-                this.addCommand(`${count}個  (HP回復 ${rate}%)`, "quantity", true, count);
+            for (let count = 0; count <= max; count++) {
+                const rate = foodHpRate(this._item) * count;
+                const label = count === 0 ? "使わない" :
+                    `${count}個  (${recoveryText(rate, [this._item])})`;
+                this.addCommand(label, "quantity", true, count);
             }
         }
     }
 
     class Window_CampRestConfirm extends Window_Command {
         makeCommandList() {
-            this.addCommand("この数量で使う", "yes");
-            this.addCommand("数量を選び直す", "no");
+            this.addCommand("この内容で休憩する", "yes");
+            this.addCommand("食材を選び直す", "no");
         }
     }
 
     class Scene_CampRest extends Scene_MenuBase {
         create() {
             super.create();
+            this._selectedQuantities = new Map();
             this.createHelpWindow();
-            this._helpWindow.setText("焚き火休憩では、魔物の肉1個につき全員のHPを\n最大HPの25%回復できます。\n休憩を終えると、肉を使わなくても全員のMPが全回復します。");
+            this.updateHelp();
             this.createMainWindow();
             this.createItemWindow();
             this.createQuantityWindow();
@@ -223,11 +260,11 @@
         }
 
         itemWindowRect() {
-            return this.windowRect(Math.max(1, this.meatItems().length));
+            return this.windowRect(this.meatItems().length + 1);
         }
 
         quantityWindowRect(item) {
-            return this.windowRect(Math.max(1, $gameParty.numItems(item)));
+            return this.windowRect($gameParty.numItems(item) + 1);
         }
 
         confirmWindowRect() {
@@ -245,7 +282,9 @@
         createItemWindow() {
             const rect = this.itemWindowRect();
             this._itemWindow = new Window_CampRestItem(rect, this.meatItems());
+            this._itemWindow._quantities = this._selectedQuantities;
             this._itemWindow.setHandler("item", this.onItem.bind(this));
+            this._itemWindow.setHandler("finish", this.onFinishSelection.bind(this));
             this._itemWindow.setHandler("cancel", this.showMainWindow.bind(this));
             this.addWindow(this._itemWindow);
         }
@@ -263,8 +302,8 @@
             const rect = this.confirmWindowRect();
             this._confirmWindow = new Window_CampRestConfirm(rect);
             this._confirmWindow.setHandler("yes", this.onConfirm.bind(this));
-            this._confirmWindow.setHandler("no", this.showQuantityWindow.bind(this));
-            this._confirmWindow.setHandler("cancel", this.showQuantityWindow.bind(this));
+            this._confirmWindow.setHandler("no", this.showItemWindow.bind(this));
+            this._confirmWindow.setHandler("cancel", this.showItemWindow.bind(this));
             this.addWindow(this._confirmWindow);
         }
 
@@ -273,6 +312,7 @@
         }
 
         showMainWindow() {
+            this.updateHelp();
             this._mainWindow.refresh();
             this._mainWindow.show();
             this._mainWindow.activate();
@@ -282,15 +322,17 @@
         }
 
         onMeat() {
-            this._itemWindow.refresh();
-            this._itemWindow.move(this.itemWindowRect());
             this._mainWindow.deactivate();
             this._mainWindow.hide();
-            this._itemWindow.show();
-            this._itemWindow.activate();
+            this.showItemWindow();
         }
 
         showItemWindow() {
+            this.updateHelp();
+            this._itemWindow._items = this.meatItems();
+            const rect = this.itemWindowRect();
+            this._itemWindow.move(rect.x, rect.y, rect.width, rect.height);
+            this._itemWindow.refresh();
             this._quantityWindow.hide();
             this._confirmWindow.hide();
             this._itemWindow.show();
@@ -300,49 +342,82 @@
         onItem() {
             this._selectedItem = this._itemWindow.currentExt();
             this._quantityWindow._item = this._selectedItem;
-            this._quantityWindow.move(this.quantityWindowRect(this._selectedItem));
+            const rect = this.quantityWindowRect(this._selectedItem);
+            this._quantityWindow.move(rect.x, rect.y, rect.width, rect.height);
             this._quantityWindow.refresh();
+            this._quantityWindow.selectExt(this._selectedQuantities.get(this._selectedItem) || 0);
             this._itemWindow.hide();
             this._quantityWindow.show();
             this._quantityWindow.activate();
         }
 
-        showQuantityWindow() {
-            this._confirmWindow.hide();
-            this._quantityWindow.show();
-            this._quantityWindow.activate();
+        updateHelp() {
+            const total = [...this._selectedQuantities.values()].reduce((sum, count) => sum + count, 0);
+            const rate = this.selectedHpRate();
+            const recovery = recoveryText(rate, [...this._selectedQuantities.keys()]);
+            this._helpWindow.setText(`焚き火休憩では、食材を複数種類まとめて使えます。\n選択中: 合計${total}個 / ${recovery}\n食材の効果は生存中の全員に適用。MPは全員全回復します。`);
+        }
+
+        selectedHpRate() {
+            return [...this._selectedQuantities].reduce(
+                (sum, [item, count]) => sum + foodHpRate(item) * count, 0
+            );
         }
 
         onQuantity() {
-            this._selectedQuantity = this._quantityWindow.currentExt();
-            this._quantityWindow.deactivate();
-            this._quantityWindow.hide();
+            const count = this._quantityWindow.currentExt();
+            if (count > 0) {
+                this._selectedQuantities.set(this._selectedItem, count);
+            } else {
+                this._selectedQuantities.delete(this._selectedItem);
+            }
+            this.showItemWindow();
+        }
+
+        onFinishSelection() {
+            this._itemWindow.hide();
             this._confirmWindow.show();
+            this._confirmWindow.select(0);
             this._confirmWindow.activate();
         }
 
         onConfirm() {
-            const item = this._selectedItem;
-            const count = Math.min(this._selectedQuantity, $gameParty.numItems(item));
-            if (count > 0) {
-                $gameParty.loseItem(item, count);
-                for (const actor of $gameParty.members()) {
-                    if (actor.isAlive()) actor.gainHp(Math.floor(actor.mhp * hpRecoveryRate * count));
+            for (const [item, count] of this._selectedQuantities) {
+                if ($gameParty.numItems(item) < count) {
+                    SoundManager.playBuzzer();
+                    this._helpWindow.setText("食材の所持数が足りません。食材を選び直してください。");
+                    this._confirmWindow.activate();
+                    return;
                 }
             }
-            this.finishRest(`魔物の肉を${count}個使いました。全員のHPを回復し、MPを全回復しました。`);
+            const rate = this.selectedHpRate();
+            const action = new Game_Action($gameParty.leader());
+            for (const [item, count] of this._selectedQuantities) {
+                $gameParty.loseItem(item, count);
+                for (const actor of $gameParty.members()) {
+                    if (!actor.isAlive()) continue;
+                    for (let i = 0; i < count; i++) {
+                        for (const effect of stateRemovalEffects(item)) {
+                            action.itemEffectRemoveState(actor, effect);
+                        }
+                    }
+                }
+            }
+            for (const actor of $gameParty.members()) {
+                if (actor.isAlive() && rate > 0) actor.gainHp(Math.floor(actor.mhp * rate / 100));
+            }
+            this.finishRest();
         }
 
         onRest() {
-            this.finishRest("焚き火で休憩しました。全員のMPが全回復しました。");
+            this.finishRest();
         }
 
-        finishRest(message) {
+        finishRest() {
             for (const actor of $gameParty.members()) {
                 actor.setMp(actor.mmp);
                 actor.refresh();
             }
-            $gameMessage.add(message);
             SceneManager.pop();
         }
     }

@@ -22,18 +22,23 @@ function createContext(beforePlugin = () => {}) {
         setupReservedCommonEvent() {}
 
         command117() {}
+
+        command201() {}
     }
 
     class Game_Event {
-        constructor(eventId, note = "", list = [{ code: 117 }, { code: 0 }]) {
+        constructor(eventId, note = "", list = [{ code: 117 }, { code: 0 }], trigger = 0) {
             this._eventId = eventId;
             this._data = { note };
             this._list = list;
+            this._page = { trigger, list };
+            events[eventId] = this;
         }
 
         event() { return this._data; }
         eventId() { return this._eventId; }
         list() { return this._list; }
+        page() { return this._page; }
         start() {
             if (this.list() && this.list().length > 1) this._starting = true;
         }
@@ -87,6 +92,7 @@ function createContext(beforePlugin = () => {}) {
         }
     }
 
+    const events = {};
     const context = {
         Game_System,
         Game_Temp,
@@ -106,9 +112,10 @@ function createContext(beforePlugin = () => {}) {
                 };
             }
         },
-        $gameMap: { mapId: () => 12 },
+        $gameMap: { mapId: () => 12, event: id => events[id] },
         $gamePlayer: { x: 7, y: 9 },
         $dataMapInfos: { 12: { name: "森" } },
+        $gameVariables: { value: id => ({ 4: 31, 5: 8, 6: 14 })[id] || 0 },
         $gameParty: {},
         SceneManager: {
             push(sceneClass) {
@@ -163,6 +170,60 @@ test("direct common event calls from map events record campfire locations", () =
         [
             { type: "campfire", mapId: 12, x: 7, y: 9, mapName: "森" }
         ]
+    );
+});
+
+test("touching a transfer door records the transfer destination outside the facility", () => {
+    const context = createContext();
+    context.$dataMap = { events: { 5: { name: "EV005" } } };
+    new context.Game_Event(5, "", [
+        { code: 201, parameters: [0, 31, 8, 14, 0, 0] },
+        { code: 0 }
+    ], 1);
+    const interpreter = new context.Game_Interpreter();
+    interpreter._eventId = 5;
+
+    interpreter.command201([0, 31, 8, 14, 0, 0]);
+
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(context.$gameSystem.goddessFeatherLocations())),
+        [{ type: "door", mapId: 31, x: 8, y: 14, mapName: "マップ31" }]
+    );
+});
+
+test("touch transfer destinations resolve variables and preserve named door events", () => {
+    const context = createContext();
+    context.$dataMap = { events: { 6: { name: "移動（村３）" } } };
+    context.$dataMapInfos[31] = { name: "第三村" };
+    new context.Game_Event(6, "", [
+        { code: 201, parameters: [1, 4, 5, 6, 0, 0] },
+        { code: 0 }
+    ], 0);
+    const interpreter = new context.Game_Interpreter();
+    interpreter._eventId = 6;
+
+    interpreter.command201([1, 4, 5, 6, 0, 0]);
+
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(context.$gameSystem.goddessFeatherLocations())),
+        [{ type: "door", mapId: 31, x: 8, y: 14, mapName: "第三村", eventName: "移動（村３）" }]
+    );
+});
+
+test("autorun transfer events do not create door destinations", () => {
+    const context = createContext();
+    new context.Game_Event(7, "", [
+        { code: 201, parameters: [0, 31, 8, 14, 0, 0] },
+        { code: 0 }
+    ], 3);
+    const interpreter = new context.Game_Interpreter();
+    interpreter._eventId = 7;
+
+    interpreter.command201([0, 31, 8, 14, 0, 0]);
+
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(context.$gameSystem.goddessFeatherLocations())),
+        []
     );
 });
 
